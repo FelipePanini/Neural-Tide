@@ -14,7 +14,6 @@ import math
 import time
 from collections.abc import Sequence
 
-import moderngl
 import numpy as np
 
 from config import DataTideConfig, FlowFieldConfig
@@ -24,11 +23,10 @@ from core.hand import RIGHT
 from core.hand_state import HandState
 from effects.base import Effect, EffectEnv
 from render.glow import GlowBatch
+from render.particles import ParticleRenderer
 from sim.flow_field import FlowField
 from sim.forces import Stirrer, gaussian, suction, vortex
 
-_UNIT_QUAD = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-_INSTANCE_FLOATS = 6  # pos(2) vel(2) alpha(1) colour seed(1)
 _TIMING_EMA = 0.1
 
 
@@ -170,17 +168,7 @@ class DataTide(Effect):
         self._cfg = env.config.data_tide
         self.sim = TideSimulation(self._cfg, env.config.flow, env.viewport.aspect)
         ctx = env.ctx
-        self._prog = env.shaders.program("tide")
-        self._quad = ctx.buffer(_UNIT_QUAD.tobytes())
-        self._instances = ctx.buffer(reserve=self.sim.count * _INSTANCE_FLOATS * 4, dynamic=True)
-        self._vao = ctx.vertex_array(
-            self._prog,
-            [
-                (self._quad, "2f", "in_corner"),
-                (self._instances, "2f 2f 2f/i", "in_pos", "in_vel", "in_info"),
-            ],
-        )
-        self._packed = np.empty((self.sim.count, _INSTANCE_FLOATS), dtype=np.float32)
+        self._particles = ParticleRenderer(ctx, env.shaders, self.sim.count)
         self._glows = GlowBatch(ctx, env.shaders, env.config.render.max_glows)
         self._hands: Sequence[HandState] = ()
         self._flashes: list[tuple[np.ndarray, float]] = []  # (centre, age)
@@ -200,25 +188,8 @@ class DataTide(Effect):
         viewport = self.env.viewport
         palette = self.env.palette
         sim = self.sim
-        self._packed[:, 0:2] = sim.pos
-        self._packed[:, 2:4] = sim.vel
-        self._packed[:, 4] = sim.alpha()
-        self._packed[:, 5] = sim.hue
-        self._instances.write(self._packed.tobytes())
-
-        prog = self._prog
-        prog["u_aspect"].value = viewport.aspect
-        prog["u_px"].value = viewport.pixels_to_world(1.0)
-        prog["u_size_px"].value = cfg.particle_px
-        prog["u_streak_s"].value = cfg.streak_s
-        prog["u_max_streak_px"].value = cfg.max_streak_px
-        prog["u_fast_speed"].value = cfg.fast_speed
-        prog["u_intensity"].value = cfg.intensity * self.visibility * (0.6 + 0.4 * self.intensity)
-        prog["u_primary"].value = palette.primary
-        prog["u_secondary"].value = palette.secondary
-        prog["u_highlight"].value = palette.highlight
-        prog["u_secondary_share"].value = cfg.secondary_share
-        self._vao.render(moderngl.TRIANGLE_STRIP, instances=sim.count)
+        brightness = self.visibility * (0.6 + 0.4 * self.intensity)
+        self._particles.draw(sim.pos, sim.vel, sim.alpha(), sim.hue, cfg.look, palette, viewport, brightness)
 
         glow = np.asarray(palette.glow, dtype=np.float32)
         for hand in self._hands:
@@ -239,5 +210,4 @@ class DataTide(Effect):
 
     def release(self) -> None:
         self._glows.release()
-        for obj in (self._vao, self._instances, self._quad):
-            obj.release()
+        self._particles.release()

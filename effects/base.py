@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import ClassVar
 
 import moderngl
+import numpy as np
 
 from config import Config
 from core.gestures import GestureEvent
 from core.hand_state import HandState
 from core.viewport import Viewport
+from render.focus import Spot
 from render.palette import PaletteState
 from render.shader_library import ShaderLibrary
+
+
+def _no_segmentation() -> np.ndarray | None:
+    return None
 
 
 @dataclass
@@ -26,6 +32,8 @@ class EffectEnv:
     config: Config
     viewport: Viewport  # shared with the renderer, so it follows window resizes
     palette: PaletteState
+    # Latest person mask (H, W) in image space, 0..1, when a mode asked for it.
+    segmentation: Callable[[], np.ndarray | None] = _no_segmentation
 
 
 class Effect(ABC):
@@ -40,6 +48,7 @@ class Effect(ABC):
     """
 
     name: ClassVar[str] = "efeito"
+    needs_segmentation: ClassVar[bool] = False  # turns on person segmentation while visible
 
     def __init__(self, env: EffectEnv) -> None:
         self.env = env
@@ -55,6 +64,14 @@ class Effect(ABC):
     def focus_scale(self) -> float:
         """Size of the hand spotlight for this mode (1 = default)."""
         return 1.0
+
+    def focus_strength(self) -> float:
+        """How much the hand spotlight masks this mode (0 = full screen)."""
+        return 1.0
+
+    def focus_spots(self) -> list[Spot]:
+        """Extra spotlights this mode wants lit (e.g. something between the hands)."""
+        return []
 
     def trail(self) -> tuple[float, float]:
         """(trail time constant, diffusion per second) this mode wants for the effect layer."""

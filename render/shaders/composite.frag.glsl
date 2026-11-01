@@ -4,7 +4,7 @@
 // edges, a faint ambient elsewhere). A mode change sends a ripple through the
 // layer: pixels near the expanding ring are displaced radially and its
 // leading edge glows a little.
-#define MAX_SPOTS 4
+#define MAX_SPOTS 6
 uniform sampler2D u_scene;
 uniform sampler2D u_bloom;
 uniform float u_bloom_intensity;

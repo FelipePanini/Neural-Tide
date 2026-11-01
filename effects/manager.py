@@ -9,6 +9,7 @@ from core.easing import damp
 from core.gestures import GestureEvent
 from core.hand_state import HandState
 from effects.base import Effect, EffectEnv
+from render.focus import Spot
 
 
 class ModeManager:
@@ -103,6 +104,23 @@ class ModeManager:
         weights = [(e.opacity, e.focus_scale()) for i, e in enumerate(self._effects) if self._visible(i, e)]
         total = sum(w for w, _ in weights)
         return sum(w * f for w, f in weights) / total if total > 1e-6 else 1.0
+
+    def focus_strength(self) -> float:
+        weights = [(e.opacity, e.focus_strength()) for i, e in enumerate(self._effects) if self._visible(i, e)]
+        total = sum(w for w, _ in weights)
+        return sum(w * f for w, f in weights) / total if total > 1e-6 else 1.0
+
+    def focus_spots(self) -> list[Spot]:
+        """Extra spotlights of the visible modes, faded with their opacity."""
+        return [
+            Spot(spot.center, spot.radius, spot.weight * effect.opacity)
+            for i, effect in enumerate(self._effects)
+            if self._visible(i, effect)
+            for spot in effect.focus_spots()
+        ]
+
+    def needs_segmentation(self) -> bool:
+        return any(e.needs_segmentation for i, e in enumerate(self._effects) if self._visible(i, e))
 
     def draw(self, frame_gain: float = 1.0) -> None:
         for i, effect in enumerate(self._effects):

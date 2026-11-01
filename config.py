@@ -35,7 +35,7 @@ class ModelsConfig:
         "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
         "hand_landmarker/float16/latest/hand_landmarker.task",
     )
-    # Used by mode 7 (particle body); optional until then.
+    # Person segmentation for mode 7 (particle body).
     selfie_segmenter: ModelFile = ModelFile(
         MODELS_DIR / "selfie_segmenter.tflite",
         "https://storage.googleapis.com/mediapipe-models/image_segmenter/"
@@ -123,6 +123,15 @@ class HandGeometryConfig:
     thumb_min_spread: float = 1.1  # thumb tip→pinky MCP distance / palm width
     pinch_open_ratio: float = 0.6  # thumb–index distance / palm size: pinch starts
     pinch_closed_ratio: float = 0.25  # ... pinch is complete
+
+
+@dataclass(frozen=True)
+class SegmentationConfig:
+    """Person segmentation (mode 7); only runs while a mode needs it."""
+
+    width: int = 256  # frames are downscaled to this width before segmenting
+    idle_wait_s: float = 0.1
+    mock_size: tuple[int, int] = (160, 90)  # resolution of the mouse mode's fake silhouette
 
 
 @dataclass(frozen=True)
@@ -300,7 +309,7 @@ class FocusConfig:
     idle_path: tuple[float, float] = (0.55, 0.4)  # Lissajous size (share of half width / height)
     idle_period_s: float = 31.0
     idle_fade_tau_s: float = 0.8
-    max_spots: int = 4  # must match the composite shader
+    max_spots: int = 6  # must match MAX_SPOTS in the composite shader
 
 
 @dataclass(frozen=True)
@@ -357,6 +366,18 @@ class FlowFieldConfig:
 
 
 @dataclass(frozen=True)
+class ParticleLook:
+    """How a particle system is drawn: soft streaks stretched along the velocity."""
+
+    size_px: float = 2.0
+    streak_s: float = 0.05  # streak length = speed × this (motion blur)
+    max_streak_px: float = 36.0
+    intensity: float = 0.09
+    fast_speed: float = 1.2  # speed at which particles take the highlight colour
+    secondary_share: float = 0.3  # share of particles in the palette's secondary colour
+
+
+@dataclass(frozen=True)
 class DataTideConfig:
     """Mode 1: thousands of particles riding the tide, stirred by the hands."""
 
@@ -391,12 +412,7 @@ class DataTideConfig:
     idle_period_s: float = 23.0
     idle_fade_tau_s: float = 1.2
     # Look
-    particle_px: float = 2.0
-    streak_s: float = 0.05  # streak length = speed × this (motion blur)
-    max_streak_px: float = 36.0
-    intensity: float = 0.09
-    secondary_share: float = 0.3  # share of particles in the palette's secondary colour
-    fast_speed: float = 1.2  # speed at which particles take the highlight colour
+    look: ParticleLook = field(default_factory=ParticleLook)
     glow_radius: float = 0.12
     glow_intensity: float = 0.08
     glow_pinch_boost: float = 1.2
@@ -511,11 +527,187 @@ class HoloGridConfig:
 
 
 @dataclass(frozen=True)
+class AICoreConfig:
+    """Mode 4: a breathing sphere of particles held between the hands."""
+
+    shell_particles: int = 3200
+    ring_particles: int = 900  # spread over the orbit rings
+    rings: int = 3
+    seed: int = 41
+    base_radius: float = 0.32  # world units with one hand or none
+    hand_distance_scale: float = 0.42  # with two hands: radius = palm distance × this
+    min_radius: float = 0.12
+    max_radius: float = 0.95
+    one_hand_offset: tuple[float, float] = (0.0, 0.45)  # a single hand holds the core above it
+    breath_period_s: float = 4.5
+    breath_amount: float = 0.07
+    wobble: float = 0.12  # radial noise on the shell
+    wobble_scale: float = 1.7
+    wobble_speed: float = 0.3
+    auto_spin: float = 0.25  # radians per second of slow turning
+    roll_gain: float = 1.6  # wrist roll → rotation around the vertical axis
+    tilt_gain: float = 1.4  # one hand higher than the other → tilt
+    ring_speed: float = 0.6  # radians per second along the rings
+    camera_distance: float = 3.0  # perspective strength of the 3D → 2D projection
+    # Every particle chases its place on the sphere with a critically damped spring.
+    spring_period_s: float = 0.35
+    center_tau_s: float = 0.15
+    radius_tau_s: float = 0.2
+    rotation_tau_s: float = 0.25
+    pulse_amount: float = 0.35  # pinch: a heartbeat of the whole core
+    pulse_decay_s: float = 0.5
+    pulse_frequency: float = 9.0
+    explode_speed: float = 5.0
+    explode_looseness: float = 0.04  # spring stiffness right after a fist, easing back to 1
+    reform_tau_s: float = 0.7
+    glow_radius: float = 0.8  # × core radius
+    glow_intensity: float = 0.12
+    focus_margin: float = 1.7  # the core gets its own spotlight of radius × this
+    trail_tau_s: float = 0.1
+    trail_diffusion_per_s: float = 3.0
+    look: ParticleLook = field(
+        default_factory=lambda: ParticleLook(size_px=2.2, streak_s=0.03, intensity=0.12, fast_speed=1.6, secondary_share=0.25)
+    )
+
+
+@dataclass(frozen=True)
+class RibbonsConfig:
+    """Mode 5: ribbons of light trailing from the fingertips."""
+
+    segments: int = 48
+    follow_rate: float = 16.0  # 1/s: how fast each segment chases the one ahead
+    drift: float = 0.35  # curl-noise sway, growing towards the tail (world units per second)
+    head_width: float = 0.024  # world units
+    tail_width: float = 0.003
+    intensity: float = 0.8
+    core_intensity: float = 0.9
+    fade_tau_s: float = 0.25  # a ribbon fades when its finger curls or the hand leaves
+    pinch_flare: float = 1.6  # thumb and index ribbons brighten while pinching
+    explode_speed: float = 2.2
+    idle_ribbons: int = 3
+    idle_period_s: float = 17.0
+    idle_size: tuple[float, float] = (0.55, 0.5)
+    max_ribbons: int = 16
+    seed: int = 51
+    trail_tau_s: float = 0.08
+    trail_diffusion_per_s: float = 3.0
+
+
+ATTENTION_TOKENS: tuple[str, ...] = (
+    "atenção", "token", "query", "key", "value", "softmax", "embedding", "transformer",
+    "camada", "head", "vetor", "contexto", "peso", "gradiente", "neurônio", "dados",
+    "modelo", "prompt", "sequência", "logits", "decoder", "encoder", "posição", "memória",
+    "padrão", "sinal", "rede", "IA", "LLM", "bias", "dropout", "norm", "MLP", "RoPE",
+    "KV cache", "amostra", "<eos>", "<bos>", "Σ", "Δ", "λ", "temperatura", "janela", "previsão",
+)  # fmt: skip
+
+
+@dataclass(frozen=True)
+class AttentionConfig:
+    """Mode 6: floating tokens; each hand is a query attending to the closest ones."""
+
+    tokens: tuple[str, ...] = ATTENTION_TOKENS
+    font_size: int = 26  # atlas resolution; drawn at text_scale × that in pixels
+    text_scale: float = 0.8
+    seed: int = 61
+    drift_speed: float = 0.05
+    follow_tau_s: float = 1.0
+    max_speed: float = 1.2
+    inset: float = 0.15
+    wall_stiffness: float = 2.0
+    spacing: float = 0.3
+    spacing_strength: float = 0.25
+    reach: float = 0.8  # tokens within this distance of a hand can be attended
+    top_k: int = 6
+    temperature: float = 0.06  # softmax over −distance²; lower = sharper focus
+    pinch_temperature: float = 0.015
+    hand_pull: float = 0.12  # attended tokens drift gently towards the query
+    base_intensity: float = 0.16
+    attended_intensity: float = 1.3
+    line_px: float = 1.6
+    line_intensity: float = 0.9
+    self_attention_intensity: float = 0.3  # arcs between the attended tokens
+    arc_bend: float = 0.22
+    arc_segments: int = 14
+    spark_speed: float = 1.2  # pinch: sparks run along the attention lines (lines per second)
+    spark_radius: float = 0.028
+    spark_intensity: float = 1.1
+    explode_speed: float = 1.8
+    explode_radius: float = 0.8
+    idle_period_s: float = 21.0
+    idle_strength: float = 0.5
+    focus_scale: float = 1.4
+    trail_tau_s: float = 0.06
+    trail_diffusion_per_s: float = 0.0
+
+
+@dataclass(frozen=True)
+class ParticleBodyConfig:
+    """Mode 7: the person's silhouette as digital dust that peels off in waves."""
+
+    capacity: int = 22000
+    spawn_per_s: float = 16000.0
+    seed: int = 71
+    threshold: float = 0.5
+    edge_weight: float = 5.0  # extra spawning along the outline
+    life_min_s: float = 0.6
+    life_max_s: float = 1.8
+    fade_in_s: float = 0.15
+    wave_length: float = 0.7  # dissolve bands travelling up the body (world units)
+    wave_speed: float = 0.45
+    wave_sharpness: float = 3.0
+    release_speed: float = 0.5  # drift of the dust peeling off in a wave crest
+    rise: float = 0.18  # dust floats upwards as it leaves
+    flow_drift: float = 0.6
+    follow_tau_s: float = 0.4
+    hand_circulation: float = 0.8
+    hand_core: float = 0.12
+    hand_reach: float = 0.5
+    burst_duration_s: float = 0.8  # pinch: the whole body peels off for a moment
+    explode_speed: float = 2.5
+    explode_radius: float = 0.8
+    trail_tau_s: float = 0.12
+    trail_diffusion_per_s: float = 4.0
+    look: ParticleLook = field(
+        default_factory=lambda: ParticleLook(size_px=1.8, streak_s=0.04, intensity=0.11, fast_speed=0.8, secondary_share=0.35)
+    )
+
+
+@dataclass(frozen=True)
+class CodeRainConfig:
+    """Mode 8: glyphs pouring down like liquid and flowing around the hands."""
+
+    glyphs: str = "0101011{}[]<>/\\;:=+*#$%&|~^λΣΔπµ"  # Greek letters exist in Consolas and Menlo
+    count: int = 1100
+    columns: int = 72  # glyphs enter at column positions, so streams form
+    font_size: int = 22
+    text_scale: float = 0.75
+    seed: int = 81
+    fall_speed: tuple[float, float] = (0.35, 0.95)  # world units per second
+    follow_tau_s: float = 0.25
+    wobble: float = 0.08
+    obstacle_scale: float = 0.85  # a hand is a cylinder of radius hand size × this
+    obstacle_min_radius: float = 0.12
+    current_gain: float = 0.6
+    glyph_change_rate: float = 3.0  # changes per glyph per second
+    intensity: float = 0.28
+    margin: float = 0.12
+    splash_speed: float = 1.4  # pinch
+    splash_radius: float = 0.4
+    explode_speed: float = 3.0  # fist
+    explode_radius: float = 0.7
+    focus_scale: float = 1.5
+    trail_tau_s: float = 0.07  # short trails keep the glyphs legible
+    trail_diffusion_per_s: float = 0.0
+
+
+@dataclass(frozen=True)
 class Config:
     models: ModelsConfig = field(default_factory=ModelsConfig)
     window: WindowConfig = field(default_factory=WindowConfig)
     camera: CameraConfig = field(default_factory=CameraConfig)
     tracker: TrackerConfig = field(default_factory=TrackerConfig)
+    segmentation: SegmentationConfig = field(default_factory=SegmentationConfig)
     geometry: HandGeometryConfig = field(default_factory=HandGeometryConfig)
     hand_state: HandStateConfig = field(default_factory=HandStateConfig)
     gestures: GestureConfig = field(default_factory=GestureConfig)
@@ -532,6 +724,11 @@ class Config:
     data_tide: DataTideConfig = field(default_factory=DataTideConfig)
     neural: NeuralNetConfig = field(default_factory=NeuralNetConfig)
     holo: HoloGridConfig = field(default_factory=HoloGridConfig)
+    core: AICoreConfig = field(default_factory=AICoreConfig)
+    ribbons: RibbonsConfig = field(default_factory=RibbonsConfig)
+    attention: AttentionConfig = field(default_factory=AttentionConfig)
+    body: ParticleBodyConfig = field(default_factory=ParticleBodyConfig)
+    rain: CodeRainConfig = field(default_factory=CodeRainConfig)
 
 
 CONFIG = Config()
