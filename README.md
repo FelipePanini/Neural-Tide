@@ -4,9 +4,9 @@ Arte visual interativa feita só com código: a webcam detecta suas mãos e efei
 com tema de tecnologia/IA reagem a elas em tempo real, com movimento fluido,
 como ondas do mar. A mão perturba e influencia, mas não controla diretamente.
 
-> Projeto em construção, por fases. Este README cobre as **Fases 1 e 2**
-> (fundação e o modo 1, Maré de dados). A versão final, em português e inglês,
-> com GIFs de cada modo, chega na Fase 5.
+> Projeto em construção, por fases. Este README cobre as **Fases 1 a 3**
+> (fundação, modos 1 a 3, gestos e transições). A versão final, em português e
+> inglês, com GIFs de cada modo, chega na Fase 5.
 
 ## Stack e versões
 
@@ -84,14 +84,44 @@ Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
 
 | Tecla | Ação |
 |---|---|
-| 1 a 8 | troca de modo, com crossfade (por enquanto só o 1 existe) |
+| 1 a 8 | troca de modo, com transição suave (por enquanto existem os modos 1 a 3) |
+| P | próxima paleta de cores (neon, matrix, âmbar, gelo) |
 | F1 ou D | liga/desliga o overlay de debug (no Mac, F1 costuma exigir Fn) |
 | C | fundo: câmera escurecida ou preto |
 | ESC | sair |
 
-O overlay de debug começa desligado. Ele mostra FPS, landmarks, quantidade de
-partículas e o tempo da simulação. Se o FPS ficar abaixo de 30, diminua
-`DataTideConfig.particle_count` no `config.py`.
+O overlay de debug começa desligado. Ele mostra FPS, landmarks, o gesto
+reconhecido em cada mão, intensidade, paleta e o tempo da simulação. Se o FPS
+ficar abaixo de 30, diminua `DataTideConfig.particle_count` no `config.py`.
+
+### Gestos
+
+| Gesto | Ação |
+|---|---|
+| 1 a 5 dedos levantados, mão parada por 0,5 s | ir para o modo 1 a 5 |
+| Swipe lateral com a mão aberta | próximo modo (para a esquerda) / anterior (para a direita) |
+| Pinça (polegar + indicador) | interação do modo atual |
+| Punho fechado | explosão |
+| Chifrinho (indicador + mindinho) | próxima paleta de cores |
+| Distância entre as duas mãos | intensidade |
+| Palma aberta parada por 1 s | congelar / descongelar |
+
+Enquanto você segura um gesto, um anel de progresso animado aparece na ponta do
+dedo, com o que vai acontecer escrito ao lado. Quando o gesto dispara, o anel se
+desfaz num flash e um aviso aparece no topo da tela.
+
+- **Palma aberta**: 5 dedos significam tanto "modo 5" quanto "congelar", então o
+  tempo de segurar decide. Se você soltar entre 0,5 s e 1 s, vai para o modo 5; se
+  segurar até 1 s, congela. O anel mostra um marcador na metade. Enquanto o modo 5
+  não existir, a palma só congela.
+- **Chifrinho × 2 dedos**: indicador + mindinho é sempre chifrinho, com ou sem o
+  polegar (🤘 e 🤟). "2 dedos" é qualquer outro par.
+- **Pinça × punho**: a pinça exige que o indicador esteja esticado para a frente.
+  No punho ele fica curvado, então o polegar encostando nele não conta como pinça.
+  Durante a pinça a contagem de dedos é ignorada; assim o "OK" 👌 não vira
+  "3 dedos".
+- **Congelar** não para de uma vez: o tempo da simulação desacelera até zero (e
+  acelera de volta).
 
 ### Modo mock
 
@@ -101,6 +131,7 @@ partículas e o tempo da simulação. Se o FPS ficar abaixo de 30, diminua
 | roda do mouse, rolagem do trackpad ou setas ↑/↓ | quantidade de dedos levantados (0 a 5) |
 | botão esquerdo / clique | pinça |
 | botão direito ou F (segurado) | punho fechado |
+| G (segurado) | chifrinho |
 | H | liga/desliga uma segunda mão espelhada |
 | tirar o mouse da janela | a mão sai do quadro |
 
@@ -155,6 +186,46 @@ as partículas diretamente.
 - **Ciclo de vida**: partículas nascem e morrem com fade, e quem sai da tela
   renasce em outro ponto, invisível no começo. Nenhuma posição aparece
   "teletransportada".
+- **Punho**: um impulso de velocidade para fora (as posições continuam
+  contínuas) e um flash de luz.
+
+### Modo 2: Rede neural viva
+
+Cerca de 170 nós flutuam numa corrente lenta e se ligam quando ficam próximos
+(plexus). Uma repulsão suave mantém o espaçamento.
+
+- **Pulso**: a pinça dispara o nó mais próximo. O pulso pula de nó em nó pelas
+  ligações, com velocidade constante e perdendo energia a cada salto, então se
+  espalha pela rede como uma onda e se apaga. Cada nó tem um período refratário,
+  como um neurônio, e por isso a onda não volta para trás.
+- **A mão** abre espaço na rede e a arrasta quando se move. As pontas dos dedos
+  se conectam aos nós próximos, e encostar num nó dispara um pulso pequeno.
+- **Ocioso**: pulsos espontâneos de vez em quando mantêm a rede viva.
+
+### Modo 3: Grade holográfica
+
+Uma malha em perspectiva que vai até o horizonte e é uma equação de onda 2D
+de verdade (`h_tt = c²∇²h − amortecimento·h_t`), com subpassos para respeitar a
+condição de estabilidade (CFL). Uma camada de amortecimento nas bordas absorve
+as ondas que saem, em vez de deixá-las refletir.
+
+- **Dedos**: cada dedo levantado empurra a superfície no ponto logo abaixo dele (o
+  raio da câmera que passa pela ponta do dedo encontra o plano ali). Dedo parado
+  faz uma covinha; dedo em movimento deixa uma esteira.
+- **Pinça** solta uma onda e o **punho** solta uma onda grande.
+- **Ocioso**: gotas de chuva aleatórias e um balanço suave de oceano.
+- **Visual**: as linhas são calculadas no fragment shader a partir das coordenadas
+  da grade, com `fwidth`. Assim elas têm espessura constante em pixels a qualquer
+  distância e somem antes de virar moiré no horizonte.
+
+### Transições
+
+- **Crossfade**: os modos continuam vivos e só a opacidade muda, com easing. O
+  modo que sai e o que entra se misturam no mesmo buffer de rastros.
+- **Ondulação**: cada troca de modo dispara uma onda que atravessa a camada de
+  efeitos a partir da mão que fez o gesto (ou do centro, se veio do teclado).
+- **Rastros por modo**: a Maré usa rastros longos, a rede usa médios e a grade
+  quase nenhum. O tempo dos rastros também passa por crossfade.
 
 ### Pós-processamento
 
@@ -167,6 +238,9 @@ as partículas diretamente.
 - **Tone mapping que preserva a cor**: o canal mais forte é comprimido e o matiz é
   mantido, então o neon denso continua neon em vez de virar branco. No fim entra
   um dither leve contra banding.
+- **Brilho independente do FPS**: num buffer com decaimento, a luz se acumula até
+  `1/(1 − decaimento)` vezes, e esse valor depende do FPS. Um ganho por frame
+  compensa isso, então a imagem fica igual a 30 ou a 144 FPS.
 
 ## Estrutura
 
@@ -182,18 +256,24 @@ core/
   hand_state.py      mãos no espaço do mundo, com easing por frame
   input_mock.py      mão sintética (mouse e testes)
   viewport.py        mapeamento imagem ↔ mundo ↔ pixels
+  gestures.py        máquina de estados dos gestos
 sim/
   noise.py           ruído simplex 3D vetorizado
   flow_field.py      campo de curl noise em grade, amostragem bilinear
   forces.py          vórtice, corrente e sucção (vetorizados)
+  waves.py           equação de onda 2D
 effects/
   base.py            classe Effect: enter(), exit(), update(dt, hands), draw()
   __init__.py        registro de modos (EFFECTS)
-  manager.py         troca de modo com crossfade
+  manager.py         crossfade, congelar, intensidade
   data_tide.py       modo 1: Maré de dados
+  neural_net.py      modo 2: Rede neural viva
+  holo_grid.py       modo 3: Grade holográfica
 render/
   renderer.py        ordem do frame, fundo da câmera
-  postfx.py          rastros, bloom e tone mapping
+  postfx.py          rastros, bloom, tone mapping e ondulação de transição
+  gesture_ui.py      anel de progresso, avisos e selos
+  projection.py      perspectiva e raio da tela até o plano
   glow.py            manchas de luz aditivas
   palette.py         paleta de cores com easing
   overlay.py         overlay de debug (F1)
@@ -208,8 +288,9 @@ tests/
 
 - [x] **Fase 1**: fundação (captura, tracking, One Euro, janela ModernGL, debug, mock)
 - [x] **Fase 2**: modo 1 (Maré de dados) com curl noise, rastros e bloom
-- [ ] Fase 3: máquina de gestos, transições suaves, modos 2 e 3
-- [ ] Fase 4: modos 4 a 8 e paletas
+- [x] **Fase 3**: máquina de gestos, anel de progresso, transições suaves, modos 2 e 3
+  (as 4 paletas vieram junto, porque o chifrinho precisava delas)
+- [ ] Fase 4: modos 4 a 8
 - [ ] Fase 5: gravação MP4 e README final
 
 ## Licença
