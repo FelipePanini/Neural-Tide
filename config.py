@@ -198,7 +198,115 @@ class DebugConfig:
 class RenderConfig:
     max_points: int = 4096
     max_line_segments: int = 4096
+    max_glows: int = 256
     line_feather_px: float = 1.5  # extra quad width used for anti-aliasing
+
+
+@dataclass(frozen=True)
+class PostFXConfig:
+    """Trails (decay instead of clearing), bloom and tone mapping."""
+
+    trail_tau_s: float = 0.16  # the trail loses ~63% of its light every this many seconds
+    trail_floor_per_s: float = 0.12  # subtracted over time so faint trails really reach black
+    trail_diffusion_per_s: float = 7.0  # light bleeding into neighbouring pixels (silkier trails)
+    bloom_levels: int = 5
+    bloom_threshold: float = 0.55
+    bloom_knee: float = 0.45
+    bloom_intensity: float = 0.9
+    exposure: float = 1.4
+    whiteout: float = 0.3  # how much the brightest spots bleach towards white
+    dither: float = 1.0 / 255.0  # breaks up banding in dark gradients
+
+
+@dataclass(frozen=True)
+class Palette:
+    name: str
+    primary: RGB
+    secondary: RGB
+    highlight: RGB  # fast or energetic elements
+    glow: RGB
+
+
+PALETTES: tuple[Palette, ...] = (
+    Palette("neon", primary=(0.05, 0.85, 1.0), secondary=(0.55, 0.25, 1.0), highlight=(1.0, 0.6, 0.95), glow=(0.3, 0.65, 1.0)),
+)
+
+
+@dataclass(frozen=True)
+class PaletteConfig:
+    palettes: tuple[Palette, ...] = PALETTES
+    transition_tau_s: float = 0.6
+
+
+@dataclass(frozen=True)
+class ModesConfig:
+    initial: int = 0
+    crossfade_tau_s: float = 0.6
+    hidden_opacity: float = 0.002  # below this a fading mode stops updating and drawing
+
+
+@dataclass(frozen=True)
+class FlowFieldConfig:
+    """Curl-noise current shared by particle effects."""
+
+    grid_rows: int = 48  # the field is evaluated on a grid and sampled bilinearly
+    margin: float = 0.3  # the grid extends this far past the screen edges (world units)
+    scale: float = 1.1  # noise features per world unit
+    octaves: int = 2
+    lacunarity: float = 2.1
+    gain: float = 0.45
+    evolution: float = 0.07  # noise time per second: how fast the currents reshape
+    speed: float = 0.2  # RMS flow speed, world units per second
+    swell_amplitude: float = 0.3  # slow breathing of the whole tide
+    swell_period_s: float = 14.0
+    drift_speed: float = 0.05  # uniform tidal drift whose direction wanders slowly
+    drift_turn_period_s: float = 40.0
+    seed: int = 3
+
+
+@dataclass(frozen=True)
+class DataTideConfig:
+    """Mode 1: thousands of particles riding the tide, stirred by the hands."""
+
+    particle_count: int = 24000
+    seed: int = 11
+    # Particles relax towards the local flow with this time constant
+    # (a damped spring on velocity), varied per particle for an organic feel.
+    follow_tau_s: float = 0.35
+    follow_variation: float = 0.4
+    max_speed: float = 3.0
+    life_min_s: float = 4.0
+    life_max_s: float = 9.0
+    fade_in_s: float = 0.8
+    fade_out_s: float = 1.0
+    margin: float = 0.12  # leaving the screen by this much recycles a particle
+    # Each hand is a smooth Lamb–Oseen vortex plus a current along its motion.
+    vortex_circulation: float = 1.6  # world units² per second
+    vortex_core: float = 0.12
+    vortex_reach: float = 0.75
+    right_hand_spin: float = 1.0  # +1 = counter-clockwise; the left hand spins the other way
+    current_gain: float = 0.9  # share of the hand's velocity passed to nearby particles
+    current_reach: float = 0.35
+    # Pinch turns the vortex into a drain.
+    pinch_spin_boost: float = 0.6
+    pinch_core_scale: float = 0.6
+    pinch_suction: float = 0.7  # inward speed at full pinch, world units per second
+    pinch_drain: float = 4.0  # extra ageing inside the core while pinching
+    # With no hands, a faint phantom vortex wanders around so the tide never sits still.
+    idle_circulation: float = 0.6
+    idle_path: tuple[float, float] = (0.6, 0.45)  # Lissajous size (share of half width / height)
+    idle_period_s: float = 23.0
+    idle_fade_tau_s: float = 1.2
+    # Look
+    particle_px: float = 2.0
+    streak_s: float = 0.05  # streak length = speed × this (motion blur)
+    max_streak_px: float = 36.0
+    intensity: float = 0.09
+    secondary_share: float = 0.3  # share of particles in the palette's secondary colour
+    fast_speed: float = 1.2  # speed at which particles take the highlight colour
+    glow_radius: float = 0.12
+    glow_intensity: float = 0.08
+    glow_pinch_boost: float = 1.2
 
 
 @dataclass(frozen=True)
@@ -213,6 +321,11 @@ class Config:
     background: BackgroundConfig = field(default_factory=BackgroundConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
+    postfx: PostFXConfig = field(default_factory=PostFXConfig)
+    palette: PaletteConfig = field(default_factory=PaletteConfig)
+    modes: ModesConfig = field(default_factory=ModesConfig)
+    flow: FlowFieldConfig = field(default_factory=FlowFieldConfig)
+    data_tide: DataTideConfig = field(default_factory=DataTideConfig)
 
 
 CONFIG = Config()
