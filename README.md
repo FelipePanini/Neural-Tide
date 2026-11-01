@@ -4,9 +4,9 @@ Arte visual interativa feita só com código: a webcam detecta suas mãos e efei
 com tema de tecnologia/IA reagem a elas em tempo real, com movimento fluido,
 como ondas do mar. A mão perturba e influencia, mas não controla diretamente.
 
-> Projeto em construção, por fases. Este README cobre as **Fases 1 a 3**
-> (fundação, modos 1 a 3, gestos e transições). A versão final, em português e
-> inglês, com GIFs de cada modo, chega na Fase 5.
+> Projeto em construção, por fases. Este README cobre as **Fases 1 a 4**
+> (fundação, os 8 modos, gestos, transições e paletas). A versão final, em
+> português e inglês, com GIFs de cada modo, chega na Fase 5.
 
 ## Stack e versões
 
@@ -68,8 +68,9 @@ depois em **Ajustes do Sistema › Privacidade e Segurança › Câmera** e reab
 terminal. Se um iPhone por perto virar a câmera 0 (Câmera de Continuidade), use
 `--camera 1`.
 
-`tools/download_model.py` baixa o `hand_landmarker.task` para `models/`.
-Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
+`tools/download_model.py` baixa para `models/` os dois modelos: o
+`hand_landmarker.task` e o segmentador de pessoa usado no modo 7. Quem já tinha
+rodado o script antes da Fase 4 precisa rodar de novo para baixar o segmentador.
 
 ## Como rodar
 
@@ -84,7 +85,7 @@ Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
 
 | Tecla | Ação |
 |---|---|
-| 1 a 8 | troca de modo, com transição suave (por enquanto existem os modos 1 a 3) |
+| 1 a 8 | troca de modo, com transição suave |
 | P | próxima paleta de cores (neon, matrix, âmbar, gelo) |
 | M | foco nas mãos ↔ tela cheia |
 | F1 ou D | liga/desliga o overlay de debug (no Mac, F1 costuma exigir Fn) |
@@ -100,7 +101,7 @@ ficar abaixo de 30, diminua `DataTideConfig.particle_count` no `config.py`.
 | Gesto | Ação |
 |---|---|
 | 1 a 5 dedos levantados, mão parada por 0,5 s | ir para o modo 1 a 5 |
-| Swipe lateral com a mão aberta | próximo modo (para a esquerda) / anterior (para a direita) |
+| Swipe lateral com a mão aberta | próximo modo (para a esquerda) / anterior (para a direita); é assim que se chega aos modos 6 a 8 |
 | Pinça (polegar + indicador) | interação do modo atual |
 | Punho fechado | explosão |
 | Chifrinho (indicador + mindinho) | próxima paleta de cores |
@@ -113,8 +114,8 @@ desfaz num flash e um aviso aparece no topo da tela.
 
 - **Palma aberta**: 5 dedos significam tanto "modo 5" quanto "congelar", então o
   tempo de segurar decide. Se você soltar entre 0,5 s e 1 s, vai para o modo 5; se
-  segurar até 1 s, congela. O anel mostra um marcador na metade. Enquanto o modo 5
-  não existir, a palma só congela.
+  segurar até 1 s, congela. O anel mostra um marcador na metade. Se você já estiver
+  no modo 5, a palma só congela.
 - **Chifrinho × 2 dedos**: indicador + mindinho é sempre chifrinho, com ou sem o
   polegar (🤘 e 🤟). "2 dedos" é qualquer outro par.
 - **Pinça × punho**: a pinça exige que o indicador esteja esticado para a frente.
@@ -219,10 +220,81 @@ as ondas que saem, em vez de deixá-las refletir.
   da grade, com `fwidth`. Assim elas têm espessura constante em pixels a qualquer
   distância e somem antes de virar moiré no horizonte.
 
+### Modo 4: Núcleo de IA
+
+Uma esfera de partículas (rede de Fibonacci) cercada por anéis orbitais, que
+respira e ondula com ruído, projetada em perspectiva.
+
+- **Com duas mãos** ela fica entre as palmas: a distância entre as mãos define o
+  tamanho, o giro do pulso gira a esfera e inclinar as mãos como um volante
+  inclina os anéis. Com uma mão ela flutua acima da palma; sem mãos, deriva no
+  centro.
+- **Nada rígido**: cada partícula persegue o seu lugar na esfera com uma mola
+  criticamente amortecida. O núcleo atrasa e balança quando você mexe as mãos
+  rápido.
+- **Pinça** faz um "batimento" no núcleo. O **punho** afrouxa as molas: a esfera se
+  desfaz e se recompõe enquanto a rigidez volta, com easing.
+- O núcleo tem o próprio holofote, para continuar visível entre as mãos.
+
+### Modo 5: Fios de luz
+
+Cada dedo levantado puxa uma fita de luz. A fita é uma corrente de pontos em que
+cada um persegue o anterior, então ela segue o dedo em curvas suaves. A cauda
+balança num campo de curl noise, como seda na água, e afina e esmaece até a
+ponta.
+
+- Dobrar um dedo apaga a fita dele com fade. A pinça faz as fitas do polegar e do
+  indicador brilharem mais, e o punho arremessa as fitas para fora.
+- **Ocioso**: três fitas fantasmas desenham laços devagar.
+
+### Modo 6: Atenção (LLM)
+
+Cerca de 40 palavras do mundo dos modelos de linguagem flutuam pela tela. Cada mão
+é uma *query*: os tokens mais próximos recebem pesos de atenção por um softmax
+sobre a distância (`−d²/temperatura`, top-k).
+
+- Os pesos aparecem como arcos luminosos com espessura e brilho proporcionais, e
+  os tokens atendidos crescem e acendem. Arcos mais fracos ligam os tokens
+  atendidos entre si (*self-attention*), e eles são puxados de leve para a mão.
+- **Pinça**: baixa a temperatura, deixando a atenção mais concentrada, e manda
+  faíscas pelos arcos até a mão. O **punho** espalha os tokens.
+- As palavras ficam num atlas de textura, desenhado de uma vez com quads
+  instanciados.
+
+### Modo 7: Corpo de partículas
+
+Usa o segmentador de pessoa do MediaPipe (API de Tasks). Ele só roda enquanto o
+modo 7 está na tela, em thread própria e com a imagem reduzida, então não pesa
+nos outros modos.
+
+- A poeira nasce da máscara a cada frame, com mais densidade no contorno, para a
+  silhueta ficar nítida.
+- Faixas de uma onda sobem pelo corpo: a poeira que nasce na crista se solta e sai
+  flutuando pela corrente de curl noise, e o resto fica no lugar e se apaga. O
+  corpo vive se desfazendo em ondas e se refazendo a partir da máscara ao vivo.
+- As mãos agitam a poeira. A **pinça** solta o corpo inteiro de uma vez e o
+  **punho** o explode.
+- Neste modo o holofote das mãos fica desligado, porque a própria silhueta já é a
+  forma. No mock, uma silhueta sintética (cabeça, tronco e braços indo até as mãos
+  do mouse) substitui a câmera.
+
+### Modo 8: Chuva de código líquida
+
+Glifos (0, 1 e símbolos) caem de colunas como um líquido.
+
+- Cada mão é um cilindro num **escoamento potencial** (`u − iv = iU(1 + R²/z²)`):
+  a chuva se abre na frente da mão e se fecha atrás dela, como água em volta de
+  uma pedra. Mover a mão também arrasta a correnteza.
+- Os glifos relaxam em direção a esse escoamento (com um pouco de ruído), o que
+  dá o balanço líquido. Eles se inclinam na direção do fluxo e ficam trocando de
+  símbolo.
+- **Pinça** espirra os glifos e o **punho** abre um buraco na chuva.
+
 ### Foco nas mãos
 
 Por padrão, os efeitos aparecem só em volta das mãos, para a tela não ficar
-poluída. Cada mão abre um "holofote" de borda suave, do tamanho da mão aberta
+poluída (no modo 7 o foco fica desligado, e o núcleo do modo 4 ganha um holofote
+próprio). Cada mão abre um "holofote" de borda suave, do tamanho da mão aberta
 na tela (`FocusConfig.hand_scale`), que segue a mão com a mesma suavidade do
 rastreio. Longe das mãos sobra só um resquício de luz (`ambient`). Cada modo
 ajusta o tamanho do holofote; a grade, por exemplo, usa uma janela mais larga.
@@ -236,8 +308,9 @@ o que aparece. A tecla **M** alterna, com fade, entre o foco e a tela cheia.
   modo que sai e o que entra se misturam no mesmo buffer de rastros.
 - **Ondulação**: cada troca de modo dispara uma onda que atravessa a camada de
   efeitos a partir da mão que fez o gesto (ou do centro, se veio do teclado).
-- **Rastros por modo**: a Maré usa rastros longos, a rede usa médios e a grade
-  quase nenhum. O tempo dos rastros também passa por crossfade.
+- **Rastros por modo**: a Maré usa rastros longos, a rede usa médios, e a grade, a
+  chuva e os tokens quase nenhum (para continuarem legíveis). O tempo dos rastros
+  também passa por crossfade.
 
 ### Pós-processamento
 
@@ -266,7 +339,8 @@ core/
   filters.py         filtro One Euro vetorizado
   hand.py            landmarks, dedos, pinça, tipos de dados
   hand_state.py      mãos no espaço do mundo, com easing por frame
-  input_mock.py      mão sintética (mouse e testes)
+  input_mock.py      mão e silhueta sintéticas (mouse e testes)
+  segmenter.py       segmentação de pessoa em thread, sob demanda
   viewport.py        mapeamento imagem ↔ mundo ↔ pixels
   gestures.py        máquina de estados dos gestos
 sim/
@@ -281,6 +355,11 @@ effects/
   data_tide.py       modo 1: Maré de dados
   neural_net.py      modo 2: Rede neural viva
   holo_grid.py       modo 3: Grade holográfica
+  ai_core.py         modo 4: Núcleo de IA
+  light_ribbons.py   modo 5: Fios de luz
+  attention.py       modo 6: Atenção (LLM)
+  particle_body.py   modo 7: Corpo de partículas
+  code_rain.py       modo 8: Chuva de código líquida
 render/
   renderer.py        ordem do frame, fundo da câmera
   postfx.py          rastros, bloom, tone mapping e ondulação de transição
@@ -288,6 +367,8 @@ render/
   focus.py           holofotes que limitam o efeito às mãos
   projection.py      perspectiva e raio da tela até o plano
   glow.py            manchas de luz aditivas
+  particles.py       partículas instanciadas como riscos
+  atlas.py           atlas de glifos e palavras + sprites instanciados
   palette.py         paleta de cores com easing
   overlay.py         overlay de debug (F1)
   primitives.py      pontos suaves e linhas com anti-aliasing
@@ -303,7 +384,7 @@ tests/
 - [x] **Fase 2**: modo 1 (Maré de dados) com curl noise, rastros e bloom
 - [x] **Fase 3**: máquina de gestos, anel de progresso, transições suaves, modos 2 e 3
   (as 4 paletas vieram junto, porque o chifrinho precisava delas)
-- [ ] Fase 4: modos 4 a 8
+- [x] **Fase 4**: modos 4 a 8 (núcleo de IA, fios de luz, atenção, corpo de partículas, chuva de código)
 - [ ] Fase 5: gravação MP4 e README final
 
 ## Licença
