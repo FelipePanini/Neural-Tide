@@ -13,17 +13,22 @@ from core.hand_state import HandStateSmoother
 from core.input_mock import MockHandSource
 from core.stats import RateMeter
 from core.tracker import HandTracker
+from effects import EFFECTS, EffectEnv
+from effects.manager import ModeManager
 from render.overlay import DebugInfo, DebugOverlay
+from render.palette import PaletteState
 from render.renderer import Renderer
 from render.window import create_window
 
-KEY_HINTS = "[F1 ou D] debug  [C] fundo  [ESC] sair"
+KEY_HINTS = "[1-8] modo  [F1 ou D] debug  [C] fundo  [ESC] sair"
 MOCK_HINTS = (
     "mock: roda ou setas = dedos · clique = pinça",
     "      botão direito ou F = punho · H = 2ª mão",
 )
 # F1 needs Fn on most Mac keyboards, so D toggles the overlay too.
 DEBUG_KEYS = (pygame.K_F1, pygame.K_d)
+_NUMBER_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8)
+MODE_KEYS = {key: index for index, key in enumerate(_NUMBER_KEYS)}
 
 
 class App:
@@ -36,6 +41,8 @@ class App:
         self._camera_target = cfg.background.start_with_camera
         self._camera_mix = 1.0 if self._camera_target else 0.0
         self._fps = RateMeter(cfg.debug.rate_window_s)
+        self._palette = PaletteState(cfg.palette)
+        self._modes: ModeManager | None = None
         self._running = True
 
     def run(self) -> None:
@@ -46,6 +53,8 @@ class App:
         renderer = Renderer(ctx, size, self.cfg)
         overlay = DebugOverlay(renderer, self.cfg.debug)
         smoother = HandStateSmoother(self.cfg.hand_state)
+        env = EffectEnv(ctx, renderer.shaders, self.cfg, renderer.viewport, self._palette)
+        modes = self._modes = ModeManager(env, EFFECTS, self.cfg.modes)
         if self.mock is not None and pygame.mouse.get_focused():
             self._move_pointer(renderer, pygame.mouse.get_pos())
 
@@ -71,9 +80,14 @@ class App:
                 self._camera_mix = damp(
                     self._camera_mix, float(self._camera_target), self.cfg.background.fade_tau_s, dt
                 )
+                self._palette.update(dt)
+                modes.update(dt, hands)
 
                 renderer.begin_frame()
                 renderer.draw_background(self._camera_mix)
+                renderer.begin_effects(dt)
+                modes.draw()
+                renderer.finish_effects()
                 overlay.draw(hands, self._debug_info(), dt)
                 pygame.display.flip()
 
@@ -82,6 +96,7 @@ class App:
                     clock.tick(self.cfg.window.max_fps)
         finally:
             self.source.stop()
+            modes.release()
             renderer.release()
             pygame.quit()
 
@@ -92,12 +107,14 @@ class App:
         else:
             background = "câmera" if self._camera_target else "preto"
             hints = (KEY_HINTS,)
+        effect = self._modes.active if self._modes is not None else None
         return DebugInfo(
             render_fps=self._fps.rate,
             source=self.source.status(),
-            mode="— (nenhum ainda)",
+            mode=f"{self._modes.active_index + 1} · {effect.name}" if self._modes and effect else "—",
             gesture="—",
             background=background,
+            details=tuple(effect.debug_lines()) if effect else (),
             hints=hints,
         )
 
@@ -115,6 +132,8 @@ class App:
                 overlay.toggle()
             elif event.key == pygame.K_c:
                 self._camera_target = not self._camera_target
+            elif event.key in MODE_KEYS and self._modes is not None:
+                self._modes.select(MODE_KEYS[event.key])
             elif self.mock is not None:
                 self._handle_mock_event(event, renderer)
         elif event.type == pygame.VIDEORESIZE:

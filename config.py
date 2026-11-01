@@ -166,7 +166,7 @@ class BackgroundConfig:
 
 @dataclass(frozen=True)
 class DebugConfig:
-    start_visible: bool = True
+    start_visible: bool = False
     fade_tau_s: float = 0.12
     hud_refresh_hz: float = 10.0
     rate_window_s: float = 1.0

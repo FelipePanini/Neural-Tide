@@ -26,6 +26,7 @@ class DebugInfo:
     mode: str
     gesture: str
     background: str
+    details: tuple[str, ...] = ()  # lines from the active effect
     hints: tuple[str, ...] = ()
 
 
@@ -123,7 +124,9 @@ class DebugOverlay:
             pattern = "".join("|" if up else "_" for up in hand.fingers)
             bends = " ".join(f"{b:3.0f}" for b in finger_bends(hand.world))
             lines.append(f"  {_side(hand):8s} {pattern}  pinça {hand.pinch * 100:3.0f}%  dobras {bends}")
-        lines += [f"modo      {info.mode}", f"gesto     {info.gesture}", f"fundo     {info.background}  [C]"]
+        lines.append(f"modo      {info.mode}")
+        lines += [f"          {detail}" for detail in info.details]
+        lines += [f"gesto     {info.gesture}", f"fundo     {info.background}  [C]"]
         lines += list(info.hints)
 
         color = self._cfg.text_color
