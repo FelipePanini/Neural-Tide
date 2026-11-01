@@ -1,41 +1,111 @@
 # Neural Tide
 
-Arte visual interativa feita só com código: a webcam detecta suas mãos e efeitos
-com tema de tecnologia/IA reagem a elas em tempo real, com movimento fluido,
-como ondas do mar. A mão perturba e influencia, mas não controla diretamente.
+**Português** · [English](README.en.md)
 
-> Projeto em construção, por fases. Este README cobre as **Fases 1 a 4**
-> (fundação, os 8 modos, gestos, transições e paletas). A versão final, em
-> português e inglês, com GIFs de cada modo, chega na Fase 5.
+Arte visual interativa feita só com código. A webcam detecta suas mãos e oito
+efeitos com tema de tecnologia e IA reagem a elas em tempo real, com movimento
+fluido, como ondas do mar. A mão perturba e influencia, mas nunca controla
+diretamente: nada fica "colado" nela. Você troca de efeito com gestos.
 
-## Stack e versões
+Python, MediaPipe, NumPy e shaders GLSL via ModernGL. Roda a 60 FPS em Windows e
+macOS.
+
+![Showreel com os 8 modos](assets/showreel.gif)
+
+## Os 8 modos
+
+<table>
+<tr>
+<td width="50%"><img src="assets/modo-1.gif" alt="Maré de dados"><br><b>1 · Maré de dados</b><br>24 mil partículas numa corrente de curl noise. A mão vira um redemoinho e deixa uma esteira; a pinça vira um ralo.</td>
+<td width="50%"><img src="assets/modo-2.gif" alt="Rede neural viva"><br><b>2 · Rede neural viva</b><br>Nós ligados por proximidade. A pinça dispara um pulso que pula de nó em nó como uma onda.</td>
+</tr>
+<tr>
+<td><img src="assets/modo-3.gif" alt="Grade holográfica"><br><b>3 · Grade holográfica</b><br>Malha em perspectiva que é uma equação de onda 2D de verdade. As pontas dos dedos criam ondas.</td>
+<td><img src="assets/modo-4.gif" alt="Núcleo de IA"><br><b>4 · Núcleo de IA</b><br>Esfera de partículas que respira entre as mãos. A distância entre elas define a escala e o giro do pulso, a rotação.</td>
+</tr>
+<tr>
+<td><img src="assets/modo-5.gif" alt="Fios de luz"><br><b>5 · Fios de luz</b><br>Fitas de luz saindo das cinco pontas dos dedos e balançando como seda na água.</td>
+<td><img src="assets/modo-6.gif" alt="Atenção"><br><b>6 · Atenção (LLM)</b><br>Tokens flutuando. Cada mão é uma <i>query</i>, e os pesos de atenção (softmax) viram arcos de luz.</td>
+</tr>
+<tr>
+<td><img src="assets/modo-7.gif" alt="Corpo de partículas"><br><b>7 · Corpo de partículas</b><br>A sua silhueta (segmentação do MediaPipe) vira poeira digital que se desfaz em ondas.</td>
+<td><img src="assets/modo-8.gif" alt="Chuva de código"><br><b>8 · Chuva de código líquida</b><br>Glifos escorrendo como líquido e contornando a mão como água em volta de uma pedra.</td>
+</tr>
+</table>
+
+> Os GIFs acima são gerados por `tools/render_demos.py`, com mãos sintéticas
+> fazendo trajetos fixos, então qualquer um consegue reproduzi-los. Com a webcam,
+> você grava os seus com a tecla **R** (veja [Gravando e gerando GIFs](#gravando-e-gerando-gifs)).
+
+## Gestos
+
+| Gesto | Ação |
+|---|---|
+| 1 a 5 dedos levantados, mão parada por 0,5 s | ir para o modo 1 a 5 |
+| Swipe lateral com a mão aberta | próximo modo (para a esquerda) / anterior (para a direita) |
+| Pinça (polegar + indicador) | interação do modo atual |
+| Punho fechado | explosão |
+| Chifrinho (indicador + mindinho) | próxima paleta de cores |
+| Distância entre as duas mãos | intensidade (no modo 4, a escala do núcleo) |
+| Palma aberta parada por 1 s | congelar / descongelar |
+
+Enquanto você segura um gesto, um anel de progresso animado aparece na ponta do
+dedo, com o que vai acontecer escrito ao lado. Quando o gesto dispara, o anel se
+desfaz num flash e um aviso aparece no topo da tela. Os modos 6 a 8 ficam a um
+swipe de distância (ou nas teclas 6 a 8).
+
+- **Palma aberta**: 5 dedos significam tanto "modo 5" quanto "congelar", então o
+  tempo de segurar decide. Se você soltar entre 0,5 s e 1 s, vai para o modo 5; se
+  segurar até 1 s, congela. O anel mostra um marcador na metade.
+- **Chifrinho × 2 dedos**: indicador + mindinho é sempre chifrinho, com ou sem o
+  polegar (🤘 e 🤟). "2 dedos" é qualquer outro par.
+- **Pinça × punho**: a pinça exige o indicador esticado para a frente, então o
+  polegar encostado no punho não conta. Durante a pinça a contagem de dedos é
+  ignorada; assim o "OK" 👌 não vira "3 dedos".
+- **Congelar** não para de uma vez: o tempo da simulação desacelera até zero (e
+  acelera de volta).
+
+## Teclas
+
+| Tecla | Ação |
+|---|---|
+| 1 a 8 | ir para o modo |
+| P | próxima paleta (neon, matrix, âmbar, gelo) |
+| M | foco nas mãos ↔ tela cheia |
+| R | começa / para a gravação em MP4 (`recordings/`) |
+| C | fundo: câmera escurecida ou preto |
+| F1 ou D | overlay de debug (FPS, landmarks, gesto de cada mão, tempos) |
+| ESC | sair |
+
+No Mac, o F1 costuma exigir Fn; por isso existe o **D**.
+
+## Instalação
 
 | Pacote | Versão | Função |
 |---|---|---|
 | **Python** | **3.12** | versão oficial do projeto |
-| mediapipe | 1.2.0 | HandLandmarker (API Tasks, modo VIDEO) |
-| opencv-contrib-python | 4.12.0.88 | só captura da webcam |
-| numpy | 2.2.6 | simulação vetorizada |
+| mediapipe | 1.2.0 | HandLandmarker e ImageSegmenter (API de Tasks) |
+| opencv-contrib-python | 4.12.0.88 | captura da webcam e gravação |
+| numpy | 2.2.6 | toda a simulação, vetorizada |
 | moderngl | 5.13.0 | renderização na GPU (OpenGL 3.3) |
 | pygame-ce | 2.5.8 | janela, teclado e mouse |
+| pillow (dev) | 13.0.0 | GIFs do README |
 
-As mesmas versões valem para Windows e macOS.
+Sistemas suportados: **Windows 10/11** (64 bits) e **macOS em Apple Silicon**. O
+mediapipe 1.x só publica wheels de macOS para arm64, então Macs com Intel ficam de
+fora.
 
-- **Python 3.12**: o mediapipe 1.2.0 suporta de 3.9 a 3.14, e todos os pacotes
-  acima têm wheels para Windows e Mac na 3.12 (a 3.13 também deve funcionar).
-- **OpenCV 4.12**: a partir da 4.13, o wheel de macOS traz uma cópia própria do
-  SDL2 que conflita com a do pygame. O OpenCV vem como `opencv-contrib-python`
-  porque é o pacote que o mediapipe já instala; adicionar `opencv-python` criaria
-  dois `cv2` em conflito.
-- **numpy 2.2**: o OpenCV 4.12 exige numpy abaixo de 2.3.
+<details>
+<summary>Por que essas versões</summary>
 
-### Sistemas suportados
-
-- **Windows 10/11** (64 bits)
-- **macOS em Apple Silicon** (M1 ou mais novo). O mediapipe 1.x só publica wheels
-  de macOS para arm64, então Macs com Intel não são suportados.
-
-## Instalação
+- O mediapipe 1.2.0 suporta Python de 3.9 a 3.14, e a 3.12 tem wheels de todos os
+  pacotes acima nos dois sistemas (a 3.13 também deve funcionar).
+- O OpenCV vem como `opencv-contrib-python` porque é o pacote que o mediapipe já
+  instala; adicionar `opencv-python` criaria dois `cv2` em conflito. A 4.12 é a
+  versão mais nova cujo wheel de macOS não traz um SDL2 próprio que conflita com o
+  do pygame.
+- O numpy 2.2 é porque o OpenCV 4.12 exige numpy abaixo de 2.3.
+</details>
 
 ### Windows
 
@@ -62,15 +132,13 @@ pip install -r requirements-dev.txt
 python tools/download_model.py
 ```
 
-Na primeira vez que você rodar com a webcam, o macOS pede permissão de câmera
-para o app que abriu o Python (Terminal, iTerm, VS Code…). Se você negar, libere
-depois em **Ajustes do Sistema › Privacidade e Segurança › Câmera** e reabra o
-terminal. Se um iPhone por perto virar a câmera 0 (Câmera de Continuidade), use
-`--camera 1`.
+`tools/download_model.py` baixa os dois modelos do MediaPipe para `models/`: o
+de mãos e o segmentador de pessoa, usado no modo 7.
 
-`tools/download_model.py` baixa para `models/` os dois modelos: o
-`hand_landmarker.task` e o segmentador de pessoa usado no modo 7. Quem já tinha
-rodado o script antes da Fase 4 precisa rodar de novo para baixar o segmentador.
+Na primeira vez com a webcam, o macOS pede permissão de câmera para o app que
+abriu o Python (Terminal, iTerm, VS Code…). Se você negar, libere depois em
+**Ajustes do Sistema › Privacidade e Segurança › Câmera**. Se um iPhone por perto
+virar a câmera 0 (Câmera de Continuidade), use `--camera 1`.
 
 ## Como rodar
 
@@ -81,251 +149,200 @@ rodado o script antes da Fase 4 precisa rodar de novo para baixar o segmentador.
 | `python main.py --camera 1 --size 1920x1080 --fullscreen` | outra câmera, tamanho e tela cheia |
 | `pytest` | roda os testes |
 
-### Teclas
+**Modo mock**: mover o mouse move a mão; a roda do mouse, a rolagem do trackpad
+ou as setas ↑/↓ mudam os dedos levantados; clique faz a pinça; botão direito ou
+**F** fecha o punho; **G** faz o chifrinho; **H** adiciona uma segunda mão
+espelhada; tirar o mouse da janela faz a mão sair do quadro. No modo 7, uma
+silhueta sintética substitui a câmera.
 
-| Tecla | Ação |
-|---|---|
-| 1 a 8 | troca de modo, com transição suave |
-| P | próxima paleta de cores (neon, matrix, âmbar, gelo) |
-| M | foco nas mãos ↔ tela cheia |
-| F1 ou D | liga/desliga o overlay de debug (no Mac, F1 costuma exigir Fn) |
-| C | fundo: câmera escurecida ou preto |
-| ESC | sair |
+Se o FPS cair abaixo de 30, diminua a quantidade de partículas em `config.py`
+(por exemplo, `DataTideConfig.particle_count`).
 
-O overlay de debug começa desligado. Ele mostra FPS, landmarks, o gesto
-reconhecido em cada mão, intensidade, paleta e o tempo da simulação. Se o FPS
-ficar abaixo de 30, diminua `DataTideConfig.particle_count` no `config.py`.
+## Gravando e gerando GIFs
 
-### Gestos
-
-| Gesto | Ação |
-|---|---|
-| 1 a 5 dedos levantados, mão parada por 0,5 s | ir para o modo 1 a 5 |
-| Swipe lateral com a mão aberta | próximo modo (para a esquerda) / anterior (para a direita); é assim que se chega aos modos 6 a 8 |
-| Pinça (polegar + indicador) | interação do modo atual |
-| Punho fechado | explosão |
-| Chifrinho (indicador + mindinho) | próxima paleta de cores |
-| Distância entre as duas mãos | intensidade |
-| Palma aberta parada por 1 s | congelar / descongelar |
-
-Enquanto você segura um gesto, um anel de progresso animado aparece na ponta do
-dedo, com o que vai acontecer escrito ao lado. Quando o gesto dispara, o anel se
-desfaz num flash e um aviso aparece no topo da tela.
-
-- **Palma aberta**: 5 dedos significam tanto "modo 5" quanto "congelar", então o
-  tempo de segurar decide. Se você soltar entre 0,5 s e 1 s, vai para o modo 5; se
-  segurar até 1 s, congela. O anel mostra um marcador na metade. Se você já estiver
-  no modo 5, a palma só congela.
-- **Chifrinho × 2 dedos**: indicador + mindinho é sempre chifrinho, com ou sem o
-  polegar (🤘 e 🤟). "2 dedos" é qualquer outro par.
-- **Pinça × punho**: a pinça exige que o indicador esteja esticado para a frente.
-  No punho ele fica curvado, então o polegar encostando nele não conta como pinça.
-  Durante a pinça a contagem de dedos é ignorada; assim o "OK" 👌 não vira
-  "3 dedos".
-- **Congelar** não para de uma vez: o tempo da simulação desacelera até zero (e
-  acelera de volta).
-
-### Modo mock
-
-| Entrada | Mão simulada |
-|---|---|
-| mover o mouse | move a mão (o ponteiro fica no centro da palma) |
-| roda do mouse, rolagem do trackpad ou setas ↑/↓ | quantidade de dedos levantados (0 a 5) |
-| botão esquerdo / clique | pinça |
-| botão direito ou F (segurado) | punho fechado |
-| G (segurado) | chifrinho |
-| H | liga/desliga uma segunda mão espelhada |
-| tirar o mouse da janela | a mão sai do quadro |
+1. Aperte **R** para começar a gravar e **R** de novo para parar. O MP4 vai para
+   `recordings/`, com os efeitos e o anel dos gestos, mas sem o overlay de debug.
+   A leitura dos pixels acontece uma vez por quadro do vídeo e a codificação roda
+   numa thread separada, então gravar quase não pesa no FPS.
+2. Converta um trecho em GIF:
+   ```bash
+   python tools/make_gif.py recordings/neural-tide-20261101-120000.mp4 assets/modo-1.gif --start 2 --duration 4
+   ```
+3. Para regenerar as demos sintéticas do README: `python tools/render_demos.py`.
 
 ## Como funciona
 
 ```
-Camera (thread) ──► HandTracker (thread) ──► latest() ──► loop de render (60+ fps)
-  captura e espelha    MediaPipe VIDEO         TrackingFrame    HandStateSmoother (easing)
-  a imagem             slots + One Euro                         camadas: fundo → efeitos → debug
+Camera (thread)        HandTracker (thread)         loop de render (60+ FPS)
+captura e espelha ───► MediaPipe VIDEO        ───►  HandStateSmoother (easing)
+                       slots + One Euro             GestureEngine (máquina de estados)
+                       PersonSegmenter (thread,     ModeManager → efeito(s) ativo(s)
+                       só no modo 7)                PostFX: rastros → bloom → foco → tone map
+                                                    UI dos gestos → gravação → debug
 ```
 
-- **Captura em thread**: o render sempre usa o frame mais novo, sem esperar a câmera.
-  No macOS, a primeira abertura acontece na thread principal, porque só assim o
-  sistema mostra o pedido de permissão; depois a captura segue na thread.
-- **Tracking em thread**: o MediaPipe roda fora do loop de render, então uma
-  inferência lenta não derruba o FPS da animação.
-- **Filtro One Euro** em todos os landmarks (imagem e 3D). Ele suaviza bem a mão
-  parada e responde rápido quando ela se move. Os parâmetros ficam em
-  `config.py` (`TrackerConfig.image_filter` / `world_filter`).
-- **Easing no render**: o tracker roda a ~30 Hz e o render a 60+ Hz, então cada
-  frame aproxima suavemente a mão da última posição filtrada. Quando a mão aparece
-  ou some, a presença entra e sai com fade.
+- **Nada trava o render**: câmera, tracking e segmentação rodam em threads
+  próprias, e o loop de render só lê o resultado mais novo.
+- **Mãos suaves**: filtro One Euro em todos os landmarks (imagem e 3D). Como o
+  tracking roda a ~30 Hz e o render a 60+, cada frame ainda aproxima a mão da
+  última posição com easing. Mãos aparecem e somem com fade.
 - **Esquerda/direita**: a imagem é espelhada (visão de selfie). O MediaPipe 1.2
-  rotula a mão como se a foto não fosse espelhada, então os rótulos são trocados
-  (`TrackerConfig.model_expects_mirrored`).
-- **Contagem de dedos** com landmarks 3D (em metros): soma dos ângulos das
-  articulações de cada dedo. Assim a contagem não depende da distância nem da rotação
-  da mão. O polegar também precisa apontar para fora da palma.
+  rotula a mão como se a foto não fosse espelhada, então os rótulos são trocados.
+- **Contagem de dedos** com landmarks 3D em metros: soma dos ângulos de cada
+  articulação. Não depende da distância nem da rotação da mão.
+- **Gestos**: uma máquina de estados por mão, com debounce de N frames, segurar
+  com a mão parada, rearme só depois de mudar de pose e cooldown global.
+- **Física fluida**: as partículas relaxam em direção a um campo (molas
+  amortecidas na velocidade) em vez de serem posicionadas. O ruído é simplex 3D
+  vetorizado, avaliado numa grade e amostrado por interpolação bilinear.
+- **Rastros**: a camada de efeitos é um buffer HDR (float16) que nunca é limpo:
+  cada frame multiplica o anterior por `exp(-dt/τ)`. Depois vem o bloom com filtro
+  duplo e um tone mapping que preserva o matiz, para o neon não virar branco.
+- **Brilho independente do FPS**: a luz acumulada no rastro depende do FPS, e um
+  ganho por frame compensa isso.
+- **Foco nas mãos**: holofotes gaussianos em volta de cada mão limitam a camada de
+  efeitos na composição. A simulação continua na tela toda: a máscara só decide o
+  que aparece.
+- **Transições**: crossfade das opacidades mais uma ondulação líquida que
+  atravessa a tela a partir da mão que fez o gesto.
 
-### Modo 1: Maré de dados
+<details>
+<summary><b>Detalhes de cada modo</b></summary>
 
-24 mil partículas levadas por uma corrente. A mão agita a água, mas não arrasta
-as partículas diretamente.
+- **1 · Maré de dados**: o potencial de curl noise é avaliado numa grade e a
+  velocidade é o seu rotacional, então o fluxo não tem fontes nem ralos e as
+  partículas não se amontoam. Cada mão é um vórtice de Lamb–Oseen (sem
+  singularidade no centro) mais uma corrente na direção do movimento; a direita
+  gira no sentido anti-horário e a esquerda no horário. A pinça puxa as partículas
+  num anel e o punho dá um impulso de velocidade para fora. Partículas nascem e
+  morrem com fade, então nada se teletransporta.
+- **2 · Rede neural viva**: plexus com repulsão suave. O pulso se propaga pelas
+  ligações com velocidade constante, perde energia a cada salto e respeita um
+  período refratário, como um neurônio. As pontas dos dedos se conectam aos nós.
+- **3 · Grade holográfica**: `h_tt = c²∇²h − amortecimento·h_t` resolvida com
+  subpassos (condição CFL) e uma camada absorvente nas bordas. O raio da câmera
+  que passa pela ponta do dedo encontra o plano no ponto que o dedo empurra. As
+  linhas saem do fragment shader com `fwidth`: espessura constante e sem moiré.
+- **4 · Núcleo de IA**: esfera de Fibonacci com anéis orbitais, projetada em
+  perspectiva. Cada partícula persegue o seu lugar com uma mola criticamente
+  amortecida; o punho afrouxa as molas para a esfera se desfazer e se recompor.
+- **5 · Fios de luz**: cada fita é uma corrente de pontos em que cada um persegue o
+  anterior, com a cauda balançando num campo de curl noise.
+- **6 · Atenção**: softmax de `−d²/temperatura` sobre os k tokens mais próximos de
+  cada mão. A pinça baixa a temperatura e manda faíscas pelos arcos. As palavras
+  ficam num atlas de textura com quads instanciados.
+- **7 · Corpo de partículas**: a poeira nasce da máscara de segmentação (mais
+  densa no contorno), e faixas de onda que sobem pelo corpo decidem quem se solta.
+  O segmentador só roda enquanto o modo está na tela.
+- **8 · Chuva de código**: cada mão é um cilindro num escoamento potencial
+  (`u − iv = iU(1 + R²/z²)`), então a chuva se abre e se fecha em volta dela.
+</details>
 
-- **Curl noise**: um ruído simplex 3D (x, y, tempo), vetorizado em NumPy, gera um
-  potencial numa grade grossa. A velocidade é o *rotacional* desse potencial,
-  então o fluxo não tem fontes nem ralos: as partículas formam correntes e
-  redemoinhos, como água, sem se amontoar. Cada partícula lê a grade por
-  interpolação bilinear, e por isso o custo do ruído não cresce com o número
-  de partículas.
-- **Mola amortecida na velocidade**: cada partícula relaxa em direção à
-  velocidade do fluxo local (constante de tempo que varia de partícula para
-  partícula). Nada muda de velocidade de uma vez, e há inércia: um redemoinho
-  rápido joga partículas para fora e abre um "olho", como num furacão.
-- **A mão** é um vórtice de Lamb–Oseen (giro suave, sem singularidade no centro)
-  mais uma corrente na direção do movimento dela. A mão direita gira no sentido
-  anti-horário e a esquerda no horário. Mover a mão rápido deixa uma esteira.
-- **Pinça**: o vórtice aperta e vira um ralo. As partículas se juntam num anel
-  luminoso e somem perto do centro.
-- **Ocioso**: sem mãos, um vórtice fantasma bem fraco passeia num "oito", e a maré
-  respira devagar e muda de direção, então a tela nunca congela.
-- **Ciclo de vida**: partículas nascem e morrem com fade, e quem sai da tela
-  renasce em outro ponto, invisível no começo. Nenhuma posição aparece
-  "teletransportada".
-- **Punho**: um impulso de velocidade para fora (as posições continuam
-  contínuas) e um flash de luz.
+## Como criar seu próprio modo
 
-### Modo 2: Rede neural viva
+Um modo novo é **um arquivo em `effects/` mais uma linha no registro**. Neste
+exemplo, orbes de luz seguem as pontas dos dedos e piscam com a pinça.
 
-Cerca de 170 nós flutuam numa corrente lenta e se ligam quando ficam próximos
-(plexus). Uma repulsão suave mantém o espaçamento.
+**1. Parâmetros em `config.py`** (nada de números mágicos no código):
 
-- **Pulso**: a pinça dispara o nó mais próximo. O pulso pula de nó em nó pelas
-  ligações, com velocidade constante e perdendo energia a cada salto, então se
-  espalha pela rede como uma onda e se apaga. Cada nó tem um período refratário,
-  como um neurônio, e por isso a onda não volta para trás.
-- **A mão** abre espaço na rede e a arrasta quando se move. As pontas dos dedos
-  se conectam aos nós próximos, e encostar num nó dispara um pulso pequeno.
-- **Ocioso**: pulsos espontâneos de vez em quando mantêm a rede viva.
+```python
+@dataclass(frozen=True)
+class OrbsConfig:
+    """Modo exemplo: orbes nas pontas dos dedos."""
 
-### Modo 3: Grade holográfica
+    radius: float = 0.07
+    intensity: float = 0.6
+    follow_tau_s: float = 0.08
+    fade_tau_s: float = 0.2
+    pinch_flash: float = 3.0
+```
 
-Uma malha em perspectiva que vai até o horizonte e é uma equação de onda 2D
-de verdade (`h_tt = c²∇²h − amortecimento·h_t`), com subpassos para respeitar a
-condição de estabilidade (CFL). Uma camada de amortecimento nas bordas absorve
-as ondas que saem, em vez de deixá-las refletir.
+e, na classe `Config`: `orbs: OrbsConfig = field(default_factory=OrbsConfig)`.
 
-- **Dedos**: cada dedo levantado empurra a superfície no ponto logo abaixo dele (o
-  raio da câmera que passa pela ponta do dedo encontra o plano ali). Dedo parado
-  faz uma covinha; dedo em movimento deixa uma esteira.
-- **Pinça** solta uma onda e o **punho** solta uma onda grande.
-- **Ocioso**: gotas de chuva aleatórias e um balanço suave de oceano.
-- **Visual**: as linhas são calculadas no fragment shader a partir das coordenadas
-  da grade, com `fwidth`. Assim elas têm espessura constante em pixels a qualquer
-  distância e somem antes de virar moiré no horizonte.
+**2. O efeito, em `effects/orbs.py`:**
 
-### Modo 4: Núcleo de IA
+```python
+"""Modo exemplo: orbes de luz que seguem as pontas dos dedos."""
 
-Uma esfera de partículas (rede de Fibonacci) cercada por anéis orbitais, que
-respira e ondula com ruído, projetada em perspectiva.
+from __future__ import annotations
 
-- **Com duas mãos** ela fica entre as palmas: a distância entre as mãos define o
-  tamanho, o giro do pulso gira a esfera e inclinar as mãos como um volante
-  inclina os anéis. Com uma mão ela flutua acima da palma; sem mãos, deriva no
-  centro.
-- **Nada rígido**: cada partícula persegue o seu lugar na esfera com uma mola
-  criticamente amortecida. O núcleo atrasa e balança quando você mexe as mãos
-  rápido.
-- **Pinça** faz um "batimento" no núcleo. O **punho** afrouxa as molas: a esfera se
-  desfaz e se recompõe enquanto a rigidez volta, com easing.
-- O núcleo tem o próprio holofote, para continuar visível entre as mãos.
+from collections.abc import Sequence
 
-### Modo 5: Fios de luz
+import numpy as np
 
-Cada dedo levantado puxa uma fita de luz. A fita é uma corrente de pontos em que
-cada um persegue o anterior, então ela segue o dedo em curvas suaves. A cauda
-balança num campo de curl noise, como seda na água, e afina e esmaece até a
-ponta.
+from core.easing import damp
+from core.gestures import GestureEvent, GestureKind
+from core.hand_state import HandState
+from effects.base import Effect, EffectEnv
+from render.glow import GlowBatch
 
-- Dobrar um dedo apaga a fita dele com fade. A pinça faz as fitas do polegar e do
-  indicador brilharem mais, e o punho arremessa as fitas para fora.
-- **Ocioso**: três fitas fantasmas desenham laços devagar.
 
-### Modo 6: Atenção (LLM)
+class Orbs(Effect):
+    name = "Orbes"
 
-Cerca de 40 palavras do mundo dos modelos de linguagem flutuam pela tela. Cada mão
-é uma *query*: os tokens mais próximos recebem pesos de atenção por um softmax
-sobre a distância (`−d²/temperatura`, top-k).
+    def __init__(self, env: EffectEnv) -> None:
+        super().__init__(env)
+        self._cfg = env.config.orbs
+        self._glows = GlowBatch(env.ctx, env.shaders, capacity=10)
+        self._pos = np.zeros((10, 2))  # 2 mãos × 5 dedos, com easing
+        self._light = np.zeros(10)  # brilho de cada orbe, também com easing
 
-- Os pesos aparecem como arcos luminosos com espessura e brilho proporcionais, e
-  os tokens atendidos crescem e acendem. Arcos mais fracos ligam os tokens
-  atendidos entre si (*self-attention*), e eles são puxados de leve para a mão.
-- **Pinça**: baixa a temperatura, deixando a atenção mais concentrada, e manda
-  faíscas pelos arcos até a mão. O **punho** espalha os tokens.
-- As palavras ficam num atlas de textura, desenhado de uma vez com quads
-  instanciados.
+    def update(self, dt: float, hands: Sequence[HandState]) -> None:
+        target = np.zeros(10)
+        for i, hand in enumerate(hands[:2]):
+            rows = slice(5 * i, 5 * i + 5)
+            # Os orbes perseguem os dedos em vez de grudar neles.
+            self._pos[rows] = damp(self._pos[rows], hand.tips, self._cfg.follow_tau_s, dt)
+            target[rows] = hand.presence * np.array(hand.fingers, dtype=float)
+        self._light = damp(self._light, target, self._cfg.fade_tau_s, dt)
 
-### Modo 7: Corpo de partículas
+    def on_gesture(self, event: GestureEvent) -> None:
+        if event.kind is GestureKind.PINCH_START:
+            self._light *= self._cfg.pinch_flash  # a pinça faz os orbes piscarem
 
-Usa o segmentador de pessoa do MediaPipe (API de Tasks). Ele só roda enquanto o
-modo 7 está na tela, em thread própria e com a imagem reduzida, então não pesa
-nos outros modos.
+    def draw(self) -> None:
+        color = np.asarray(self.env.palette.highlight) * self._cfg.intensity * self.visibility
+        self._glows.add(self._pos, self._cfg.radius, color[None, :] * self._light[:, None])
+        self._glows.flush(self.env.viewport)
 
-- A poeira nasce da máscara a cada frame, com mais densidade no contorno, para a
-  silhueta ficar nítida.
-- Faixas de uma onda sobem pelo corpo: a poeira que nasce na crista se solta e sai
-  flutuando pela corrente de curl noise, e o resto fica no lugar e se apaga. O
-  corpo vive se desfazendo em ondas e se refazendo a partir da máscara ao vivo.
-- As mãos agitam a poeira. A **pinça** solta o corpo inteiro de uma vez e o
-  **punho** o explode.
-- Neste modo o holofote das mãos fica desligado, porque a própria silhueta já é a
-  forma. No mock, uma silhueta sintética (cabeça, tronco e braços indo até as mãos
-  do mouse) substitui a câmera.
+    def release(self) -> None:
+        self._glows.release()
+```
 
-### Modo 8: Chuva de código líquida
+**3. Registro, em `effects/__init__.py`:** importe `Orbs` e acrescente-o à lista
+`EFFECTS`. A posição na lista é o número do modo: o nono modo fica a um swipe de
+distância.
 
-Glifos (0, 1 e símbolos) caem de colunas como um líquido.
+O que vem pronto para o seu modo:
 
-- Cada mão é um cilindro num **escoamento potencial** (`u − iv = iU(1 + R²/z²)`):
-  a chuva se abre na frente da mão e se fecha atrás dela, como água em volta de
-  uma pedra. Mover a mão também arrasta a correnteza.
-- Os glifos relaxam em direção a esse escoamento (com um pouco de ruído), o que
-  dá o balanço líquido. Eles se inclinam na direção do fluxo e ficam trocando de
-  símbolo.
-- **Pinça** espirra os glifos e o **punho** abre um buraco na chuva.
+| Recurso | Para que serve |
+|---|---|
+| `update(dt, hands)` / `draw()` | obrigatórios. `dt` já chega 0 quando a tela está congelada |
+| `hands` | lista de `HandState`: `points`, `tips`, `palm`, `velocity`, `fingers`, `pinch`, `presence`, `roll`, `world` |
+| `self.visibility` | multiplique o brilho por ele: inclui o crossfade e a compensação de FPS |
+| `self.intensity` | 1 = neutro; segue a distância entre as duas mãos |
+| `self.env.palette` | cores da paleta atual, já com easing |
+| `on_gesture(event)` | `PINCH_START`, `PINCH_END`, `EXPLODE` |
+| `trail()` | quanto rastro o modo quer (tempo e difusão) |
+| `focus_scale()`, `focus_strength()`, `focus_spots()` | tamanho e força do foco nas mãos, mais holofotes extras |
+| `needs_segmentation` | `True` liga a segmentação de pessoa; a máscara chega por `self.env.segmentation()` |
+| `GlowBatch`, `ParticleRenderer`, `PrimitiveBatch`, `SpriteBatch` | luzes, partículas, linhas e textos prontos para usar |
+| `FlowField`, `vortex`, `suction`, `WaveField` | campos e forças vetorizados, em `sim/` |
 
-### Foco nas mãos
+Para ver o modo sem webcam: `python main.py --mock`. Para testar sem janela,
+`render/offscreen.py` roda o pipeline inteiro numa textura (é o que os testes e as
+demos usam).
 
-Por padrão, os efeitos aparecem só em volta das mãos, para a tela não ficar
-poluída (no modo 7 o foco fica desligado, e o núcleo do modo 4 ganha um holofote
-próprio). Cada mão abre um "holofote" de borda suave, do tamanho da mão aberta
-na tela (`FocusConfig.hand_scale`), que segue a mão com a mesma suavidade do
-rastreio. Longe das mãos sobra só um resquício de luz (`ambient`). Cada modo
-ajusta o tamanho do holofote; a grade, por exemplo, usa uma janela mais larga.
-Sem mãos, um holofote menor e mais fraco passeia devagar, então o estado ocioso
-continua vivo. A simulação segue acontecendo na tela toda: a máscara só decide
-o que aparece. A tecla **M** alterna, com fade, entre o foco e a tela cheia.
+## Testes
 
-### Transições
+```bash
+pytest
+```
 
-- **Crossfade**: os modos continuam vivos e só a opacidade muda, com easing. O
-  modo que sai e o que entra se misturam no mesmo buffer de rastros.
-- **Ondulação**: cada troca de modo dispara uma onda que atravessa a camada de
-  efeitos a partir da mão que fez o gesto (ou do centro, se veio do teclado).
-- **Rastros por modo**: a Maré usa rastros longos, a rede usa médios, e a grade, a
-  chuva e os tokens quase nenhum (para continuarem legíveis). O tempo dos rastros
-  também passa por crossfade.
-
-### Pós-processamento
-
-- **Rastros**: a camada de efeitos fica num buffer HDR (float16) que nunca é
-  limpo. A cada frame, o frame anterior é multiplicado por `exp(-dt/τ)` (decaimento
-  independente do FPS) e se espalha um pouco para os vizinhos.
-- **Partículas como riscos**: cada partícula é um quad instanciado e esticado na
-  direção da velocidade (motion blur), desenhado com mistura aditiva.
-- **Bloom** em cadeia de mipmaps com filtro duplo (dual Kawase) e limiar suave.
-- **Tone mapping que preserva a cor**: o canal mais forte é comprimido e o matiz é
-  mantido, então o neon denso continua neon em vez de virar branco. No fim entra
-  um dither leve contra banding.
-- **Brilho independente do FPS**: num buffer com decaimento, a luz se acumula até
-  `1/(1 − decaimento)` vezes, e esse valor depende do FPS. Um ganho por frame
-  compensa isso, então a imagem fica igual a 30 ou a 144 FPS.
+São 120+ testes: filtro One Euro, contagem de dedos com rotações aleatórias,
+tracker, máquina de gestos, simulações de todos os modos, gravador e renderização
+offscreen de cada modo. Os testes de renderização são pulados se não houver
+OpenGL 3.3.
 
 ## Estrutura
 
@@ -333,60 +350,18 @@ o que aparece. A tecla **M** alterna, com fade, entre o foco e a tela cheia.
 main.py              argumentos de linha de comando
 app.py               loop principal
 config.py            todos os parâmetros ajustáveis
-core/
-  camera.py          captura da webcam em thread
-  tracker.py         MediaPipe HandLandmarker + slots + One Euro
-  filters.py         filtro One Euro vetorizado
-  hand.py            landmarks, dedos, pinça, tipos de dados
-  hand_state.py      mãos no espaço do mundo, com easing por frame
-  input_mock.py      mão e silhueta sintéticas (mouse e testes)
-  segmenter.py       segmentação de pessoa em thread, sob demanda
-  viewport.py        mapeamento imagem ↔ mundo ↔ pixels
-  gestures.py        máquina de estados dos gestos
-sim/
-  noise.py           ruído simplex 3D vetorizado
-  flow_field.py      campo de curl noise em grade, amostragem bilinear
-  forces.py          vórtice, corrente e sucção (vetorizados)
-  waves.py           equação de onda 2D
-effects/
-  base.py            classe Effect: enter(), exit(), update(dt, hands), draw()
-  __init__.py        registro de modos (EFFECTS)
-  manager.py         crossfade, congelar, intensidade
-  data_tide.py       modo 1: Maré de dados
-  neural_net.py      modo 2: Rede neural viva
-  holo_grid.py       modo 3: Grade holográfica
-  ai_core.py         modo 4: Núcleo de IA
-  light_ribbons.py   modo 5: Fios de luz
-  attention.py       modo 6: Atenção (LLM)
-  particle_body.py   modo 7: Corpo de partículas
-  code_rain.py       modo 8: Chuva de código líquida
-render/
-  renderer.py        ordem do frame, fundo da câmera
-  postfx.py          rastros, bloom, tone mapping e ondulação de transição
-  gesture_ui.py      anel de progresso, avisos e selos
-  focus.py           holofotes que limitam o efeito às mãos
-  projection.py      perspectiva e raio da tela até o plano
-  glow.py            manchas de luz aditivas
-  particles.py       partículas instanciadas como riscos
-  atlas.py           atlas de glifos e palavras + sprites instanciados
-  palette.py         paleta de cores com easing
-  overlay.py         overlay de debug (F1)
-  primitives.py      pontos suaves e linhas com anti-aliasing
-  text.py            texto via pygame.font em texturas
-  shaders/*.glsl
-tools/download_model.py
+core/                câmera, tracking, One Euro, mãos, gestos, segmentação, mock
+sim/                 ruído simplex, curl noise, forças, equação de onda
+effects/             um arquivo por modo + base.py, manager.py e o registro
+render/              janela, pós-processamento, foco, UI dos gestos, gravação, shaders/
+tools/               download dos modelos, MP4 → GIF, demos dos modos
 tests/
+assets/              GIFs do README
 ```
 
-## Roadmap
+## Créditos e licença
 
-- [x] **Fase 1**: fundação (captura, tracking, One Euro, janela ModernGL, debug, mock)
-- [x] **Fase 2**: modo 1 (Maré de dados) com curl noise, rastros e bloom
-- [x] **Fase 3**: máquina de gestos, anel de progresso, transições suaves, modos 2 e 3
-  (as 4 paletas vieram junto, porque o chifrinho precisava delas)
-- [x] **Fase 4**: modos 4 a 8 (núcleo de IA, fios de luz, atenção, corpo de partículas, chuva de código)
-- [ ] Fase 5: gravação MP4 e README final
-
-## Licença
-
-MIT. Veja [LICENSE](LICENSE).
+Feito por [Felipe Panini](https://github.com/FelipePanini). Usa
+[MediaPipe](https://ai.google.dev/edge/mediapipe), [ModernGL](https://github.com/moderngl/moderngl),
+[pygame-ce](https://pyga.me), [NumPy](https://numpy.org) e [OpenCV](https://opencv.org).
+Licença MIT: veja [LICENSE](LICENSE).
