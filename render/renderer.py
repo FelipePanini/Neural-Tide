@@ -7,6 +7,7 @@ import numpy as np
 
 from config import Config
 from core.viewport import Viewport
+from render.postfx import PostFX
 from render.primitives import PrimitiveBatch
 from render.shader_library import ShaderLibrary
 from render.text import TextRenderer
@@ -15,10 +16,11 @@ _FULLSCREEN_QUAD = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=
 
 
 class Renderer:
-    """Owns the shaders, the camera background, the primitive batch and text.
+    """Owns the shaders, the camera background, the effect layer, primitives and text.
 
-    Renders into ``target`` (the window by default, or an offscreen
-    framebuffer for tests and recordings).
+    Frame order: ``begin_frame`` → ``draw_background`` → ``begin_effects`` →
+    effects draw → ``finish_effects`` → overlay. Renders into ``target`` (the
+    window by default, or an offscreen framebuffer for tests and recordings).
     """
 
     def __init__(
@@ -40,6 +42,7 @@ class Renderer:
         self._background_vao = ctx.vertex_array(self._background_prog, [(self._quad, "2f", "in_pos")])
         self._camera_tex: moderngl.Texture | None = None
 
+        self.postfx = PostFX(ctx, self.shaders, size, cfg.postfx)
         self.primitives = PrimitiveBatch(ctx, self.shaders, cfg.render)
         self.text = TextRenderer(ctx, self.shaders, cfg.debug)
 
@@ -52,7 +55,10 @@ class Renderer:
         return self._camera_tex is not None
 
     def resize(self, size: tuple[int, int]) -> None:
-        self.viewport.width, self.viewport.height = max(size[0], 1), max(size[1], 1)
+        size = (max(size[0], 1), max(size[1], 1))
+        if size != self.size:
+            self.viewport.width, self.viewport.height = size
+            self.postfx.resize(size)
 
     def set_camera_image(self, image: np.ndarray, upload: bool = True) -> None:
         """Track the camera aspect ratio and (optionally) upload the RGB frame."""
@@ -89,12 +95,21 @@ class Renderer:
         self._background_vao.render(moderngl.TRIANGLE_STRIP)
         self.ctx.enable(moderngl.BLEND)
 
+    def begin_effects(self, dt: float) -> None:
+        """Bind the HDR effect layer (last frame faded) with additive blending."""
+        self.postfx.begin(dt)
+
+    def finish_effects(self) -> None:
+        """Bloom, tone map and add the effect layer onto the target."""
+        self.postfx.finish(self.target)
+
     def use_alpha_blending(self) -> None:
         self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
     def release(self) -> None:
         self.text.release()
         self.primitives.release()
+        self.postfx.release()
         if self._camera_tex is not None:
             self._camera_tex.release()
         self._background_vao.release()
