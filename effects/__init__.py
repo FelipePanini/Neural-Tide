@@ -7,6 +7,7 @@ from effects.data_tide import DataTide
 from effects.holo_grid import HoloGrid
 from effects.light_ribbons import LightRibbons
 from effects.neural_net import NeuralNet
+from effects.particle_body import ParticleBody
 
 # Order = mode number: keys 1–8 and the finger-count gestures select by position.
 EFFECTS: list[type[Effect]] = [
@@ -16,6 +17,7 @@ EFFECTS: list[type[Effect]] = [
     AICore,
     LightRibbons,
     Attention,
+    ParticleBody,
 ]
 
 __all__ = ["EFFECTS", "Effect", "EffectEnv"]
