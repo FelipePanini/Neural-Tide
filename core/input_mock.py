@@ -141,8 +141,9 @@ def synthetic_hand(
 class MockHandSource:
     """Turns the mouse into a hand so everything can be tested without a webcam.
 
-    Mouse wheel: raised fingers (0–5) · left button: pinch · right button: fist ·
-    H: mirrored second hand · moving the pointer out of the window: hand leaves.
+    Mouse wheel / trackpad scroll or arrow keys: raised fingers (0–5) · left
+    button: pinch · right button or F: fist · H: mirrored second hand · moving
+    the pointer out of the window: hand leaves.
     """
 
     def __init__(self, cfg: Config) -> None:
@@ -157,6 +158,8 @@ class MockHandSource:
         self._finger_count = cfg.mock.default_fingers
         self._curls = np.array(FINGER_PRESETS[self._finger_count])
         self._second_hand = False
+        self._scroll_accum = 0.0
+        self._scroll_blocked_until = 0.0
         self._frame = EMPTY_FRAME
 
     @property
@@ -193,6 +196,16 @@ class MockHandSource:
 
     def change_fingers(self, delta: int) -> None:
         self._finger_count = min(max(self._finger_count + delta, 0), 5)
+
+    def scroll(self, amount: float, now: float) -> None:
+        """Mouse wheel or trackpad: one finger per ``wheel_step``, then a short cooldown."""
+        if now < self._scroll_blocked_until:
+            return
+        self._scroll_accum += amount
+        if abs(self._scroll_accum) >= self._cfg.wheel_step:
+            self.change_fingers(1 if self._scroll_accum > 0 else -1)
+            self._scroll_accum = 0.0
+            self._scroll_blocked_until = now + self._cfg.wheel_cooldown_s
 
     def toggle_second_hand(self) -> None:
         self._second_hand = not self._second_hand

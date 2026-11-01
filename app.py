@@ -17,8 +17,13 @@ from render.overlay import DebugInfo, DebugOverlay
 from render.renderer import Renderer
 from render.window import create_window
 
-KEY_HINTS = "[F1] debug  [C] fundo  [ESC] sair"
-MOCK_HINTS = ("mock: roda = dedos · clique = pinça", "      botão direito = punho · H = 2ª mão")
+KEY_HINTS = "[F1 ou D] debug  [C] fundo  [ESC] sair"
+MOCK_HINTS = (
+    "mock: roda ou setas = dedos · clique = pinça",
+    "      botão direito ou F = punho · H = 2ª mão",
+)
+# F1 needs Fn on most Mac keyboards, so D toggles the overlay too.
+DEBUG_KEYS = (pygame.K_F1, pygame.K_d)
 
 
 class App:
@@ -34,11 +39,13 @@ class App:
         self._running = True
 
     def run(self) -> None:
+        # Start the source before the window: on macOS the first camera open
+        # may block on the permission prompt.
+        self.source.start()
         ctx, size = create_window(self.cfg.window)
         renderer = Renderer(ctx, size, self.cfg)
         overlay = DebugOverlay(renderer, self.cfg.debug)
         smoother = HandStateSmoother(self.cfg.hand_state)
-        self.source.start()
         if self.mock is not None and pygame.mouse.get_focused():
             self._move_pointer(renderer, pygame.mouse.get_pos())
 
@@ -104,12 +111,12 @@ class App:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self._running = False
-            elif event.key == pygame.K_F1:
+            elif event.key in DEBUG_KEYS:
                 overlay.toggle()
             elif event.key == pygame.K_c:
                 self._camera_target = not self._camera_target
-            elif event.key == pygame.K_h and self.mock is not None:
-                self.mock.toggle_second_hand()
+            elif self.mock is not None:
+                self._handle_mock_event(event, renderer)
         elif event.type == pygame.VIDEORESIZE:
             renderer.resize(pygame.display.get_window_size())
         elif self.mock is not None:
@@ -126,7 +133,18 @@ class App:
             elif event.button == pygame.BUTTON_RIGHT:
                 self.mock.set_fist(pressed)
         elif event.type == pygame.MOUSEWHEEL:
-            self.mock.change_fingers((event.y > 0) - (event.y < 0))
+            # "Natural" scrolling (macOS default) reports flipped values.
+            self.mock.scroll(-event.precise_y if event.flipped else event.precise_y, time.perf_counter())
+        elif event.type in (pygame.KEYDOWN, pygame.KEYUP):
+            pressed = event.type == pygame.KEYDOWN
+            if event.key == pygame.K_f:
+                self.mock.set_fist(pressed)
+            elif pressed and event.key == pygame.K_UP:
+                self.mock.change_fingers(1)
+            elif pressed and event.key == pygame.K_DOWN:
+                self.mock.change_fingers(-1)
+            elif pressed and event.key == pygame.K_h:
+                self.mock.toggle_second_hand()
         elif event.type == pygame.WINDOWLEAVE:
             self.mock.set_pointer(None)
         elif event.type == pygame.WINDOWENTER:
