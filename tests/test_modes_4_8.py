@@ -162,10 +162,10 @@ def test_flow_goes_around_the_cylinder() -> None:
     np.testing.assert_allclose(far, [[0.0, -1.0]], atol=1e-3)  # undisturbed far away
     side = np.array([[0.2 * math.cos(0.7), 0.2 * math.sin(0.7)]])
     v = flow_around_cylinder(side * 1.01, speed, 0.2)
-    radial = float(v @ side.T) / 0.2
+    radial = float((v @ side.T)[0, 0]) / 0.2
     assert abs(radial) < 0.05 * float(np.linalg.norm(v))  # slides along the surface
     inside = flow_around_cylinder(side * 0.3, speed, 0.2)
-    assert float(inside @ side.T) > 0  # pushed out of the hand
+    assert float((inside @ side.T)[0, 0]) > 0  # pushed out of the hand
 
 
 def test_rain_keeps_out_of_the_hand() -> None:
