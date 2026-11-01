@@ -12,6 +12,7 @@ import moderngl
 from config import Config
 from core.hand_state import HandState
 from core.viewport import Viewport
+from render.palette import PaletteState
 from render.shader_library import ShaderLibrary
 
 
@@ -22,7 +23,8 @@ class EffectEnv:
     ctx: moderngl.Context
     shaders: ShaderLibrary
     config: Config
-    viewport: Viewport
+    viewport: Viewport  # shared with the renderer, so it follows window resizes
+    palette: PaletteState
 
 
 class Effect(ABC):
@@ -53,6 +55,10 @@ class Effect(ABC):
     @abstractmethod
     def draw(self) -> None:
         """Draw into the bound framebuffer (the renderer sets additive blending)."""
+
+    def debug_lines(self) -> list[str]:
+        """Extra lines for the debug overlay (particle counts, timings...)."""
+        return []
 
     def release(self) -> None:
         """Free GPU resources."""

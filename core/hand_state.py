@@ -14,7 +14,7 @@ import numpy as np
 
 from config import HandStateConfig
 from core.easing import damp
-from core.hand import FINGERTIPS, INDEX_TIP, THUMB_TIP, TrackingFrame, palm_center
+from core.hand import FINGERTIPS, INDEX_TIP, PALM_POINTS, THUMB_TIP, TrackingFrame, palm_center
 from core.viewport import Viewport
 
 
@@ -41,6 +41,10 @@ class HandState:
     @property
     def palm(self) -> np.ndarray:
         return palm_center(self.points)
+
+    @property
+    def palm_velocity(self) -> np.ndarray:
+        return self.velocity[list(PALM_POINTS)].mean(axis=0)
 
     @property
     def tips(self) -> np.ndarray:
