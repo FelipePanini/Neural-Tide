@@ -53,6 +53,10 @@ class Viewport:
         py = (1.0 - xy[..., 1]) * 0.5 * self.height
         return np.stack((px, py), axis=-1)
 
+    def pixel_to_world_point(self, px: float, py: float) -> np.ndarray:
+        """Window pixel (origin top-left) to a world-space point."""
+        return np.array(((px / self.width * 2.0 - 1.0) * self.aspect, 1.0 - py / self.height * 2.0))
+
     def pixels_to_world(self, length_px: float) -> float:
         """Convert a length in pixels to world units."""
         return 2.0 * length_px / max(self.height, 1)

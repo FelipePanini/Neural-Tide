@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import moderngl
 import numpy as np
 
-from config import RGBA, UIConfig
+from config import RGBA, RecordingConfig, UIConfig
 from core.easing import damp
 from core.gestures import GestureFrame, HoldProgress
 from core.hand_state import HandState
@@ -124,6 +124,22 @@ class GestureUI:
         self._renderer.use_alpha_blending()
         self._draw_link(intensity)
         self._draw_texts()
+
+    def draw_recording(self, elapsed: float, cfg: RecordingConfig) -> None:
+        """Blinking red dot and timer in the bottom-right corner (not part of the video)."""
+        ui = self._cfg
+        renderer = self._renderer
+        renderer.use_alpha_blending()
+        width, height = renderer.size
+        label = f"REC {int(elapsed) // 60:02d}:{int(elapsed) % 60:02d}"
+        tex = renderer.text.texture([(label, ui.text_color)], ui.badge_font_size, background=ui.panel_color, padding=ui.padding_px)
+        corner = (width - ui.toast_top_px / 2.0, height - ui.toast_top_px / 2.0)
+        renderer.text.draw(tex, corner, renderer.size, anchor=(1.0, 1.0))
+        dot = renderer.viewport.pixel_to_world_point(corner[0] - tex.size[0] - cfg.indicator_px * 1.5, corner[1] - tex.size[1] / 2.0)
+        r, g, b, a = cfg.indicator_color
+        blink = 0.55 + 0.45 * np.cos(elapsed * 2.0 * np.pi)
+        renderer.primitives.add_points(dot, cfg.indicator_px * 2.0, (r, g, b, a * blink))
+        renderer.primitives.flush(renderer.viewport)
 
     def _draw_rings(self) -> None:
         if not self._rings:

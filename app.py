@@ -7,7 +7,7 @@ import time
 import numpy as np
 import pygame
 
-from config import Config
+from config import RECORDINGS_DIR, Config
 from core.easing import damp
 from core.gestures import GestureEngine, GestureEvent, GestureFrame, GestureKind
 from core.hand import HandSource
@@ -21,10 +21,11 @@ from render.focus import FocusState
 from render.gesture_ui import GestureUI
 from render.overlay import DebugInfo, DebugOverlay
 from render.palette import PaletteState
+from render.recorder import Recorder
 from render.renderer import Renderer
 from render.window import create_window
 
-KEY_HINTS = "[1-8] modo  [P] paleta  [M] foco  [F1 ou D] debug  [C] fundo  [ESC] sair"
+KEY_HINTS = "[1-8] modo  [P] paleta  [M] foco  [R] gravar  [F1 ou D] debug  [C] fundo  [ESC] sair"
 MOCK_HINTS = (
     "mock: roda ou setas = dedos · clique = pinça",
     "      botão direito ou F = punho · G = chifrinho · H = 2ª mão",
@@ -50,6 +51,7 @@ class App:
         self._palette = PaletteState(cfg.palette)
         self._gestures = GestureEngine(cfg.gestures)
         self._focus = FocusState(cfg.focus)
+        self._recorder = Recorder(cfg.recording, RECORDINGS_DIR)
         self._last_gestures: GestureFrame | None = None
         self._modes: ModeManager | None = None
         self._renderer: Renderer | None = None
@@ -114,13 +116,18 @@ class App:
                 modes.draw(gain)
                 renderer.finish_effects()
                 ui.draw(modes.intensity)
+                self._recorder.capture(renderer.target, renderer.size, now)  # effects + gesture UI
                 overlay.draw(hands, self._debug_info(), dt)
+                if self._recorder.active:
+                    ui.draw_recording(self._recorder.elapsed(now), self.cfg.recording)
                 pygame.display.flip()
 
                 self._fps.tick(now)
                 if self.cfg.window.max_fps:
                     clock.tick(self.cfg.window.max_fps)
         finally:
+            if self._recorder.active:
+                print(f"gravação salva em {self._recorder.stop()}")
             self.source.stop()
             ui.release()
             modes.release()
@@ -140,6 +147,20 @@ class App:
         self._palette.cycle()
         if self._ui is not None:
             self._ui.notify(f"paleta · {self._palette.name}")
+
+    def _toggle_recording(self, renderer: Renderer) -> None:
+        if self._ui is None:
+            return
+        if self._recorder.active:
+            path = self._recorder.stop()
+            dropped = f" ({self._recorder.dropped} quadros perdidos)" if self._recorder.dropped else ""
+            self._ui.notify(f"salvo em recordings/{path.name if path else ''}{dropped}")
+            return
+        try:
+            self._recorder.start(renderer.size)
+            self._ui.notify("gravando · R para parar")
+        except RuntimeError as exc:
+            self._ui.notify(str(exc))
 
     def _on_gesture(self, event: GestureEvent) -> None:
         modes, ui = self._modes, self._ui
@@ -211,6 +232,8 @@ class App:
                 self._select_mode(MODE_KEYS[event.key], np.zeros(2))
             elif event.key == pygame.K_p:
                 self._cycle_palette()
+            elif event.key == pygame.K_r:
+                self._toggle_recording(renderer)
             elif event.key == pygame.K_m:
                 on = self._focus.toggle()
                 if self._ui is not None:

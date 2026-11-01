@@ -211,7 +211,8 @@ class DebugConfig:
     fade_tau_s: float = 0.12
     hud_refresh_hz: float = 10.0
     rate_window_s: float = 1.0
-    font_names: str = "consolas,menlo,dejavusansmono,couriernew,monospace"
+    # Menlo first: on macOS pygame aliases a missing "consolas" to Courier, which has no Greek.
+    font_names: str = "menlo,consolas,dejavusansmono,couriernew,monospace"
     font_size: int = 16
     label_font_size: int = 14
     text_cache_size: int = 96
@@ -259,6 +260,19 @@ class UIConfig:
     text_color: RGBA8 = (225, 242, 255, 255)
     panel_color: RGBA8 = (4, 10, 20, 150)
     padding_px: int = 8
+
+
+@dataclass(frozen=True)
+class RecordingConfig:
+    """R key: MP4 of the rendered output in recordings/ (effects + gesture UI, no debug)."""
+
+    fps: int = 30
+    codec: str = "mp4v"  # works on Windows and macOS; "avc1" (H.264) is smaller where available
+    fallback_codec: str = "mp4v"
+    queue_frames: int = 90  # frames buffered for the writer thread before dropping
+    max_repeats: int = 3  # when rendering stutters, a frame is repeated to keep real time
+    indicator_px: float = 9.0
+    indicator_color: RGBA = (1.0, 0.2, 0.25, 0.95)
 
 
 @dataclass(frozen=True)
@@ -690,7 +704,7 @@ class CodeRainConfig:
     obstacle_min_radius: float = 0.12
     current_gain: float = 0.6
     glyph_change_rate: float = 3.0  # changes per glyph per second
-    intensity: float = 0.28
+    intensity: float = 0.42
     margin: float = 0.12
     splash_speed: float = 1.4  # pinch
     splash_radius: float = 0.4
@@ -716,6 +730,7 @@ class Config:
     debug: DebugConfig = field(default_factory=DebugConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    recording: RecordingConfig = field(default_factory=RecordingConfig)
     postfx: PostFXConfig = field(default_factory=PostFXConfig)
     focus: FocusConfig = field(default_factory=FocusConfig)
     palette: PaletteConfig = field(default_factory=PaletteConfig)
