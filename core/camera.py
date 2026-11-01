@@ -22,6 +22,15 @@ _BACKENDS = {
 }
 
 
+def _unavailable_message(index: int) -> str:
+    if sys.platform == "darwin":
+        return (
+            f"câmera {index} indisponível: libere o app do terminal em Ajustes do Sistema > "
+            "Privacidade e Segurança > Câmera e abra o terminal de novo"
+        )
+    return f"câmera {index} indisponível (tentando de novo)"
+
+
 def _resolve_backend(name: str) -> int:
     """OpenCV capture API for ``name``; "auto" picks the fast one per platform."""
     if name == "auto":
@@ -47,7 +56,8 @@ class Camera:
     """Reads the webcam continuously; consumers only ever see the latest frame.
 
     If the camera is missing or stops delivering frames, the thread keeps
-    retrying and reports the problem through ``error`` instead of crashing.
+    retrying (with back-off) and reports the problem through ``error`` instead
+    of crashing.
     """
 
     def __init__(self, cfg: CameraConfig, rate_window_s: float = 1.0) -> None:
@@ -57,6 +67,7 @@ class Camera:
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="camera", daemon=True)
         self._meter = RateMeter(rate_window_s)
+        self._first_capture: cv2.VideoCapture | None = None
         self.error: str | None = None
         self.resolution: tuple[int, int] | None = None
 
@@ -65,6 +76,14 @@ class Camera:
         return self._meter.rate
 
     def start(self) -> None:
+        """Start capturing. On macOS this blocks until the first open finishes.
+
+        macOS only shows the camera permission prompt when the capture is
+        opened on the main thread (OpenCV cannot spin the run loop from another
+        thread), so the first open happens here and is handed to the worker.
+        """
+        if _resolve_backend(self._cfg.backend) == cv2.CAP_AVFOUNDATION:
+            self._first_capture = self._open()
         self._thread.start()
 
     def stop(self) -> None:
@@ -104,13 +123,17 @@ class Camera:
     def _run(self) -> None:
         cfg = self._cfg
         seq = 0
+        retry_delay = cfg.retry_delay_s
         while not self._stop.is_set():
-            cap = self._open()
+            cap = self._first_capture if self._first_capture is not None else self._open()
+            self._first_capture = None
             if cap is None:
-                self.error = f"câmera {cfg.index} indisponível (tentando de novo)"
-                self._stop.wait(cfg.retry_delay_s)
+                self.error = _unavailable_message(cfg.index)
+                self._stop.wait(retry_delay)
+                retry_delay = min(retry_delay * 2.0, cfg.retry_max_delay_s)
                 continue
             self.error = None
+            retry_delay = cfg.retry_delay_s
             failures = 0
             try:
                 while not self._stop.is_set():

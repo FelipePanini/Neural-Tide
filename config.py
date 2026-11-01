@@ -69,6 +69,7 @@ class CameraConfig:
     fourcc: str = "MJPG"  # lets most notebook webcams deliver 720p at 30 fps
     buffer_size: int = 1  # keep only the newest frame in the driver queue
     retry_delay_s: float = 1.0
+    retry_max_delay_s: float = 5.0  # retries back off up to this delay
     read_failures_before_reopen: int = 30
     read_failure_sleep_s: float = 0.01
 
@@ -146,6 +147,10 @@ class MockConfig:
     tilt_deg: float = 10.0  # the hand leans outwards as it moves to the sides
     jitter: float = 0.002  # landmark noise (image units) so the One Euro filter has work to do
     default_fingers: int = 5
+    # Scrolling this much (one mouse-wheel notch = 1.0) changes the finger count by one.
+    wheel_step: float = 1.0
+    # Pause after each change so a trackpad swipe does not skip straight from 0 to 5.
+    wheel_cooldown_s: float = 0.15
     seed: int = 7
 
 
