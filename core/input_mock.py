@@ -27,6 +27,7 @@ from core.hand import (
     HandObservation,
     SourceStatus,
     TrackingFrame,
+    palm_center,
 )
 from core.stats import RateMeter
 from core.tracker import HandFilterBank
@@ -138,6 +139,31 @@ def synthetic_hand(
     return HandObservation(landmarks=image, world=world, handedness=handedness, score=1.0)
 
 
+def _segment_distance(px: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    ab = b - a
+    t = np.clip(((px - a) @ ab) / max(float(ab @ ab), 1e-9), 0.0, 1.0)
+    return np.linalg.norm(px - (a + t[..., None] * ab), axis=-1)
+
+
+def mock_silhouette(size: tuple[int, int], palms: Sequence[np.ndarray]) -> np.ndarray:
+    """Soft person mask (H, W) in image space; arms reach for the given palm positions."""
+    width, height = size
+    aspect = width / height
+    ys, xs = np.mgrid[0:height, 0:width]
+    px = np.stack(((xs + 0.5) / width * aspect, (ys + 0.5) / height), axis=-1)  # aspect-correct units
+    head = np.linalg.norm(px - (0.5 * aspect, 0.32), axis=-1) - 0.1
+    torso_center = np.array((0.5 * aspect, 0.85))
+    torso = np.linalg.norm((px - torso_center) / (0.22, 0.38), axis=-1) * 0.22 - 0.22
+    shape = np.minimum(head, torso)
+    shoulders = [np.array((0.5 * aspect - 0.17, 0.58)), np.array((0.5 * aspect + 0.17, 0.58))]
+    targets = sorted((np.array((p[0] * aspect, p[1])) for p in palms), key=lambda p: p[0])[:2]
+    resting = [shoulders[0] + (-0.05, 0.35), shoulders[1] + (0.05, 0.35)]
+    for shoulder, hand in zip(shoulders, targets + resting[len(targets):], strict=False):
+        shape = np.minimum(shape, _segment_distance(px, shoulder, hand) - 0.045)
+    edge = 1.5 / height  # about a pixel and a half of soft edge
+    return np.clip(0.5 - shape / edge, 0.0, 1.0).astype(np.float32)
+
+
 class MockHandSource:
     """Turns the mouse into a hand so everything can be tested without a webcam.
 
@@ -159,6 +185,9 @@ class MockHandSource:
         self._finger_count = cfg.mock.default_fingers
         self._curls = np.array(FINGER_PRESETS[self._finger_count])
         self._second_hand = False
+        self._segmentation = False
+        self._mask_size = cfg.segmentation.mock_size
+        self._mask_cache: tuple[int, np.ndarray] | None = None
         self._scroll_accum = 0.0
         self._scroll_blocked_until = 0.0
         self._frame = EMPTY_FRAME
@@ -185,6 +214,18 @@ class MockHandSource:
 
     def status(self) -> SourceStatus:
         return SourceStatus(label="mock (mouse)", tracking_fps=self._meter.rate)
+
+    def set_segmentation(self, enabled: bool) -> None:
+        self._segmentation = enabled
+
+    def segmentation(self) -> np.ndarray | None:
+        """A simple fake person (head, torso, arms reaching for the mock hands)."""
+        if not self._segmentation:
+            return None
+        if self._mask_cache is None or self._mask_cache[0] != self._frame.seq:
+            palms = [palm_center(h.landmarks[:, :2]) for h in self._frame.hands]
+            self._mask_cache = (self._frame.seq, mock_silhouette(self._mask_size, palms))
+        return self._mask_cache[1]
 
     def set_pointer(self, uv: tuple[float, float] | None) -> None:
         self._pointer = uv

@@ -64,7 +64,7 @@ class App:
         renderer = Renderer(ctx, size, self.cfg)
         overlay = DebugOverlay(renderer, self.cfg.debug)
         smoother = HandStateSmoother(self.cfg.hand_state)
-        env = EffectEnv(ctx, renderer.shaders, self.cfg, renderer.viewport, self._palette)
+        env = EffectEnv(ctx, renderer.shaders, self.cfg, renderer.viewport, self._palette, self.source.segmentation)
         modes = self._modes = ModeManager(env, EFFECTS, self.cfg.modes)
         ui = self._ui = GestureUI(renderer, self.cfg.ui, self._palette, self.cfg.render.max_rings)
         self._renderer = renderer
@@ -84,6 +84,7 @@ class App:
 
                 if self.mock is not None:
                     self.mock.update(now, dt, renderer.viewport.image_aspect)
+                self.source.set_segmentation(modes.needs_segmentation())
                 camera = self.source.camera_frame()
                 if camera is not None and camera.seq != last_camera_seq:
                     show = self._camera_target or self._camera_mix > 0.001
@@ -104,7 +105,8 @@ class App:
                 self._palette.update(dt)
                 modes.update(dt, hands)
                 spots = self._focus.update(hands, dt, renderer.viewport.aspect, modes.focus_scale())
-                renderer.postfx.set_focus(spots, self._focus.amount)
+                spots = sorted(spots + modes.focus_spots(), key=lambda spot: -spot.weight)
+                renderer.postfx.set_focus(spots, self._focus.amount * modes.focus_strength())
 
                 renderer.begin_frame()
                 renderer.draw_background(self._camera_mix)

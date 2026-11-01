@@ -17,6 +17,7 @@ import numpy as np
 
 from config import Config, HandGeometryConfig, TrackerConfig
 from core.camera import Camera, CameraFrame
+from core.segmenter import PersonSegmenter
 from core.filters import OneEuroFilter
 from core.hand import (
     EMPTY_FRAME,
@@ -174,6 +175,7 @@ class HandTracker:
     def __init__(self, cfg: Config) -> None:
         self._cfg = cfg
         self._camera = Camera(cfg.camera, cfg.debug.rate_window_s)
+        self._segmenter = PersonSegmenter(self._camera, cfg.segmentation, cfg.models.selfie_segmenter)
         self._bank = HandFilterBank(cfg.tracker, cfg.geometry)
         self._frame = EMPTY_FRAME
         self._stop = threading.Event()
@@ -189,6 +191,7 @@ class HandTracker:
     def stop(self) -> None:
         self._stop.set()
         self._thread.join(timeout=2.0)
+        self._segmenter.stop()
         self._camera.stop()
 
     def latest(self) -> TrackingFrame:
@@ -197,6 +200,12 @@ class HandTracker:
     def camera_frame(self) -> CameraFrame | None:
         return self._camera.latest()
 
+    def set_segmentation(self, enabled: bool) -> None:
+        self._segmenter.set_enabled(enabled)
+
+    def segmentation(self) -> np.ndarray | None:
+        return self._segmenter.latest()
+
     def status(self) -> SourceStatus:
         return SourceStatus(
             label="webcam",
@@ -204,7 +213,7 @@ class HandTracker:
             camera_fps=self._camera.fps,
             inference_ms=self._inference_ms,
             resolution=self._camera.resolution,
-            error=self._error or self._camera.error,
+            error=self._error or self._camera.error or self._segmenter.error,
         )
 
     def _create_landmarker(self) -> Any:

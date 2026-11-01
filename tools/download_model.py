@@ -2,9 +2,9 @@
 
 Usage::
 
-    python tools/download_model.py          # hand landmarker (required)
-    python tools/download_model.py --all    # + selfie segmenter (mode 7)
-    python tools/download_model.py --force  # download again even if present
+    python tools/download_model.py              # hand landmarker + selfie segmenter
+    python tools/download_model.py --hand-only  # skip the segmenter (mode 7)
+    python tools/download_model.py --force      # download again even if present
 """
 
 from __future__ import annotations
@@ -52,12 +52,13 @@ def download(model: ModelFile, force: bool = False) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--all", action="store_true", help="also download the selfie segmenter (mode 7)")
+    parser.add_argument("--hand-only", action="store_true", help="skip the selfie segmenter used by mode 7")
+    parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)  # old flag, now the default
     parser.add_argument("--force", action="store_true", help="download again even if the file exists")
     args = parser.parse_args()
 
     models = [CONFIG.models.hand_landmarker]
-    if args.all:
+    if not args.hand_only:
         models.append(CONFIG.models.selfie_segmenter)
     try:
         for model in models:

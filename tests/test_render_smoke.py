@@ -16,7 +16,7 @@ moderngl = pytest.importorskip("moderngl")
 from config import CONFIG  # noqa: E402
 from core.hand import SourceStatus, TrackingFrame  # noqa: E402
 from core.hand_state import HandStateSmoother  # noqa: E402
-from core.input_mock import FINGER_PRESETS, synthetic_hand  # noqa: E402
+from core.input_mock import FINGER_PRESETS, mock_silhouette, synthetic_hand  # noqa: E402
 from core.tracker import HandFilterBank  # noqa: E402
 from effects import EFFECTS, EffectEnv  # noqa: E402
 from effects.manager import ModeManager  # noqa: E402
@@ -67,8 +67,12 @@ def render_frames(  # type: ignore[no-untyped-def]
     overlay = DebugOverlay(renderer, cfg.debug)
     gradient = np.linspace(0, 255, 64 * 48 * 3, dtype=np.uint8).reshape(48, 64, 3)
     renderer.set_camera_image(gradient)
+    palms: list[np.ndarray] = []
     modes = ModeManager(
-        EffectEnv(ctx, renderer.shaders, cfg, renderer.viewport, PaletteState(cfg.palette)),
+        EffectEnv(
+            ctx, renderer.shaders, cfg, renderer.viewport, PaletteState(cfg.palette),
+            lambda: mock_silhouette(cfg.segmentation.mock_size, palms),
+        ),
         EFFECTS if effects else [],
         cfg.modes,
     )
@@ -81,8 +85,10 @@ def render_frames(  # type: ignore[no-untyped-def]
         aspect = renderer.viewport.image_aspect
         obs = [synthetic_hand(hand_path(t), curls, pinch=pinch, image_aspect=aspect)] if hand else []
         hands = smoother.update(TrackingFrame(i + 1, t, bank.update(obs, t)), renderer.viewport, 1.0 / FPS)
+        palms[:] = [o.landmarks[:9:4, :2].mean(axis=0) for o in obs]
         modes.update(1.0 / FPS, hands)
-        renderer.postfx.set_focus(spotlight.update(hands, 1.0 / FPS, renderer.viewport.aspect, modes.focus_scale()), spotlight.amount)
+        spots = spotlight.update(hands, 1.0 / FPS, renderer.viewport.aspect, modes.focus_scale()) + modes.focus_spots()
+        renderer.postfx.set_focus(sorted(spots, key=lambda s: -s.weight), spotlight.amount * modes.focus_strength())
         renderer.begin_frame()
         renderer.draw_background(camera_visibility)
         gain = renderer.begin_effects(1.0 / FPS, *modes.trail((cfg.postfx.trail_tau_s, cfg.postfx.trail_diffusion_per_s)))

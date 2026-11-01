@@ -130,6 +130,14 @@ class HandSource(Protocol):
         """Newest camera image for the background, if the source has one."""
         ...
 
+    def set_segmentation(self, enabled: bool) -> None:
+        """Turn person segmentation on or off (it costs CPU, so only while needed)."""
+        ...
+
+    def segmentation(self) -> np.ndarray | None:
+        """Latest person mask (H, W), 0..1, in the displayed image space."""
+        ...
+
 
 # --------------------------------------------------------------------------- geometry
 
