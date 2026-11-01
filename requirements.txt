@@ -1,0 +1,8 @@
+# Runtime dependencies. Tested with Python 3.12 (see README).
+mediapipe==1.2.0
+# mediapipe already depends on opencv-contrib-python; pin it instead of adding
+# opencv-python, which would install a second, conflicting cv2.
+opencv-contrib-python==4.14.0.94
+numpy==2.5.4
+moderngl==5.13.0
+pygame-ce==2.5.8
