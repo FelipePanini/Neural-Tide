@@ -4,8 +4,9 @@ Arte visual interativa feita só com código: a webcam detecta suas mãos e efei
 com tema de tecnologia/IA reagem a elas em tempo real, com movimento fluido,
 como ondas do mar. A mão perturba e influencia, mas não controla diretamente.
 
-> Projeto em construção, por fases. Este README cobre a **Fase 1 (fundação)**.
-> A versão final, em português e inglês, com GIFs de cada modo, chega na Fase 5.
+> Projeto em construção, por fases. Este README cobre as **Fases 1 e 2**
+> (fundação e o modo 1, Maré de dados). A versão final, em português e inglês,
+> com GIFs de cada modo, chega na Fase 5.
 
 ## Stack e versões
 
@@ -83,9 +84,14 @@ Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
 
 | Tecla | Ação |
 |---|---|
+| 1 a 8 | troca de modo, com crossfade (por enquanto só o 1 existe) |
 | F1 ou D | liga/desliga o overlay de debug (no Mac, F1 costuma exigir Fn) |
 | C | fundo: câmera escurecida ou preto |
 | ESC | sair |
+
+O overlay de debug começa desligado. Ele mostra FPS, landmarks, quantidade de
+partículas e o tempo da simulação. Se o FPS ficar abaixo de 30, diminua
+`DataTideConfig.particle_count` no `config.py`.
 
 ### Modo mock
 
@@ -124,6 +130,44 @@ Camera (thread) ──► HandTracker (thread) ──► latest() ──► loop
   articulações de cada dedo. Assim a contagem não depende da distância nem da rotação
   da mão. O polegar também precisa apontar para fora da palma.
 
+### Modo 1: Maré de dados
+
+24 mil partículas levadas por uma corrente. A mão agita a água, mas não arrasta
+as partículas diretamente.
+
+- **Curl noise**: um ruído simplex 3D (x, y, tempo), vetorizado em NumPy, gera um
+  potencial numa grade grossa. A velocidade é o *rotacional* desse potencial,
+  então o fluxo não tem fontes nem ralos: as partículas formam correntes e
+  redemoinhos, como água, sem se amontoar. Cada partícula lê a grade por
+  interpolação bilinear, e por isso o custo do ruído não cresce com o número
+  de partículas.
+- **Mola amortecida na velocidade**: cada partícula relaxa em direção à
+  velocidade do fluxo local (constante de tempo que varia de partícula para
+  partícula). Nada muda de velocidade de uma vez, e há inércia: um redemoinho
+  rápido joga partículas para fora e abre um "olho", como num furacão.
+- **A mão** é um vórtice de Lamb–Oseen (giro suave, sem singularidade no centro)
+  mais uma corrente na direção do movimento dela. A mão direita gira no sentido
+  anti-horário e a esquerda no horário. Mover a mão rápido deixa uma esteira.
+- **Pinça**: o vórtice aperta e vira um ralo. As partículas se juntam num anel
+  luminoso e somem perto do centro.
+- **Ocioso**: sem mãos, um vórtice fantasma bem fraco passeia num "oito", e a maré
+  respira devagar e muda de direção, então a tela nunca congela.
+- **Ciclo de vida**: partículas nascem e morrem com fade, e quem sai da tela
+  renasce em outro ponto, invisível no começo. Nenhuma posição aparece
+  "teletransportada".
+
+### Pós-processamento
+
+- **Rastros**: a camada de efeitos fica num buffer HDR (float16) que nunca é
+  limpo. A cada frame, o frame anterior é multiplicado por `exp(-dt/τ)` (decaimento
+  independente do FPS) e se espalha um pouco para os vizinhos.
+- **Partículas como riscos**: cada partícula é um quad instanciado e esticado na
+  direção da velocidade (motion blur), desenhado com mistura aditiva.
+- **Bloom** em cadeia de mipmaps com filtro duplo (dual Kawase) e limiar suave.
+- **Tone mapping que preserva a cor**: o canal mais forte é comprimido e o matiz é
+  mantido, então o neon denso continua neon em vez de virar branco. No fim entra
+  um dither leve contra banding.
+
 ## Estrutura
 
 ```
@@ -138,11 +182,20 @@ core/
   hand_state.py      mãos no espaço do mundo, com easing por frame
   input_mock.py      mão sintética (mouse e testes)
   viewport.py        mapeamento imagem ↔ mundo ↔ pixels
+sim/
+  noise.py           ruído simplex 3D vetorizado
+  flow_field.py      campo de curl noise em grade, amostragem bilinear
+  forces.py          vórtice, corrente e sucção (vetorizados)
 effects/
   base.py            classe Effect: enter(), exit(), update(dt, hands), draw()
   __init__.py        registro de modos (EFFECTS)
+  manager.py         troca de modo com crossfade
+  data_tide.py       modo 1: Maré de dados
 render/
-  renderer.py        fundo da câmera, estado da GPU
+  renderer.py        ordem do frame, fundo da câmera
+  postfx.py          rastros, bloom e tone mapping
+  glow.py            manchas de luz aditivas
+  palette.py         paleta de cores com easing
   overlay.py         overlay de debug (F1)
   primitives.py      pontos suaves e linhas com anti-aliasing
   text.py            texto via pygame.font em texturas
@@ -154,7 +207,7 @@ tests/
 ## Roadmap
 
 - [x] **Fase 1**: fundação (captura, tracking, One Euro, janela ModernGL, debug, mock)
-- [ ] Fase 2: modo 1 (Maré de dados) com curl noise, rastros e bloom
+- [x] **Fase 2**: modo 1 (Maré de dados) com curl noise, rastros e bloom
 - [ ] Fase 3: máquina de gestos, transições suaves, modos 2 e 3
 - [ ] Fase 4: modos 4 a 8 e paletas
 - [ ] Fase 5: gravação MP4 e README final
