@@ -126,6 +126,38 @@ class HandGeometryConfig:
 
 
 @dataclass(frozen=True)
+class GestureConfig:
+    """Gesture state machine: debounce, holds, swipes and cooldowns."""
+
+    debounce_frames: int = 4  # a pose must be seen this many frames in a row to count
+    cooldown_s: float = 0.8  # after any discrete action, nothing else fires for this long
+    presence_min: float = 0.5  # hands still fading in or out are ignored
+    # Holds only progress while the palm is (almost) still.
+    hold_max_speed: float = 0.45  # world units per second
+    hold_decay_rate: float = 3.0  # held seconds lost per second of movement
+    count_hold_s: float = 0.5  # 1–5 fingers → mode 1–5
+    freeze_hold_s: float = 1.0  # open palm → freeze / unfreeze
+    horns_hold_s: float = 0.35  # index + pinky → next palette
+    fist_hold_s: float = 0.2  # fist → explode
+    # Pinch with hysteresis; the index must reach forward (a fist curls it back).
+    pinch_on: float = 0.75
+    pinch_off: float = 0.5
+    pinch_min_index_reach: float = 0.95  # index tip↔wrist distance / palm size
+    # Swipe: open hand travelling sideways quickly.
+    swipe_window_s: float = 0.3
+    swipe_min_distance: float = 0.45  # world units within the window
+    swipe_min_speed: float = 1.2  # world units per second at the end of the swipe
+    swipe_axis_ratio: float = 2.0  # horizontal travel must beat vertical by this factor
+    swipe_open_share: float = 0.6  # share of the window the hand must be open
+    swipe_left_is_next: bool = True  # like turning a page
+    # Distance between two hands → intensity.
+    two_hand_near: float = 0.4
+    two_hand_far: float = 2.4
+    intensity_near: float = 0.45
+    intensity_far: float = 1.8
+
+
+@dataclass(frozen=True)
 class HandStateConfig:
     """Per-frame easing applied on the render thread (on top of One Euro)."""
 
@@ -195,10 +227,37 @@ class DebugConfig:
 
 
 @dataclass(frozen=True)
+class UIConfig:
+    """On-screen feedback: progress rings, toasts and badges."""
+
+    ring_radius_px: float = 24.0
+    ring_width_px: float = 3.5
+    ring_quad_scale: float = 2.0  # quad half-size / ring radius (room for the glow and flash)
+    ring_intensity: float = 1.1
+    ring_fade_tau_s: float = 0.12
+    ring_progress_tau_s: float = 0.04
+    flash_duration_s: float = 0.5
+    label_font_size: int = 15
+    label_offset_px: float = 36.0
+    toast_font_size: int = 26
+    toast_duration_s: float = 1.6
+    toast_fade_tau_s: float = 0.18
+    toast_top_px: float = 44.0
+    badge_font_size: int = 16
+    link_px: float = 1.5
+    link_alpha: float = 0.4
+    link_fade_tau_s: float = 0.25
+    text_color: RGBA8 = (225, 242, 255, 255)
+    panel_color: RGBA8 = (4, 10, 20, 150)
+    padding_px: int = 8
+
+
+@dataclass(frozen=True)
 class RenderConfig:
     max_points: int = 4096
     max_line_segments: int = 4096
     max_glows: int = 256
+    max_rings: int = 8
     line_feather_px: float = 1.5  # extra quad width used for anti-aliasing
 
 
@@ -216,6 +275,12 @@ class PostFXConfig:
     exposure: float = 1.4
     whiteout: float = 0.3  # how much the brightest spots bleach towards white
     dither: float = 1.0 / 255.0  # breaks up banding in dark gradients
+    # Mode changes send a liquid ripple across the effect layer.
+    ripple_duration_s: float = 1.4
+    ripple_max_radius: float = 2.6  # in screen heights
+    ripple_width: float = 0.09
+    ripple_strength: float = 0.035  # peak displacement, in screen heights
+    ripple_rim: float = 0.35  # brightness of the ripple's leading edge
 
 
 @dataclass(frozen=True)
@@ -229,6 +294,9 @@ class Palette:
 
 PALETTES: tuple[Palette, ...] = (
     Palette("neon", primary=(0.05, 0.85, 1.0), secondary=(0.55, 0.25, 1.0), highlight=(1.0, 0.6, 0.95), glow=(0.3, 0.65, 1.0)),
+    Palette("matrix", primary=(0.1, 1.0, 0.35), secondary=(0.0, 0.5, 0.2), highlight=(0.8, 1.0, 0.75), glow=(0.2, 0.9, 0.4)),
+    Palette("âmbar", primary=(1.0, 0.6, 0.1), secondary=(1.0, 0.25, 0.05), highlight=(1.0, 0.92, 0.65), glow=(1.0, 0.5, 0.15)),
+    Palette("gelo", primary=(0.7, 0.9, 1.0), secondary=(0.3, 0.55, 1.0), highlight=(1.0, 1.0, 1.0), glow=(0.55, 0.8, 1.0)),
 )
 
 
@@ -243,6 +311,10 @@ class ModesConfig:
     initial: int = 0
     crossfade_tau_s: float = 0.6
     hidden_opacity: float = 0.002  # below this a fading mode stops updating and drawing
+    freeze_tau_s: float = 0.35  # time slows down into (and speeds up out of) a freeze
+    intensity_tau_s: float = 0.35  # following the distance between two hands
+    intensity_release_tau_s: float = 1.5  # drifting back to neutral when a hand leaves
+    neutral_intensity: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -307,6 +379,112 @@ class DataTideConfig:
     glow_radius: float = 0.12
     glow_intensity: float = 0.08
     glow_pinch_boost: float = 1.2
+    # Fist: outward burst of velocity plus a flash.
+    explode_speed: float = 2.6
+    explode_radius: float = 0.7
+    flash_duration_s: float = 0.7
+    flash_radius: float = 0.55
+    flash_intensity: float = 0.5
+
+
+@dataclass(frozen=True)
+class NeuralNetConfig:
+    """Mode 2: floating nodes linked when close; a pinch fires a pulse through the net."""
+
+    node_count: int = 170
+    seed: int = 21
+    trail_tau_s: float = 0.1  # shorter trails than the tide: links are long-lived shapes
+    trail_diffusion_per_s: float = 4.0
+    drift_speed: float = 0.07  # nodes ride a slow curl-noise current
+    follow_tau_s: float = 0.8
+    max_speed: float = 1.5
+    inset: float = 0.08  # soft walls keep nodes this far inside the screen
+    wall_stiffness: float = 3.0
+    spacing: float = 0.14  # closer nodes push each other apart
+    spacing_strength: float = 0.3
+    link_distance: float = 0.27
+    # Hands: the palm parts the net gently, its motion drags it, fingertips plug in.
+    hand_push: float = 0.3
+    hand_push_reach: float = 0.28
+    hand_current_gain: float = 0.5
+    hand_current_reach: float = 0.35
+    finger_link_distance: float = 0.33
+    touch_radius: float = 0.06  # a fingertip this close to a node fires a small pulse
+    touch_energy: float = 0.45
+    # Pulses hop along links, losing energy on every hop.
+    pulse_speed: float = 1.1  # world units per second along a link
+    pulse_energy: float = 1.0
+    hop_decay: float = 0.9
+    min_energy: float = 0.12
+    refractory_s: float = 0.6
+    activity_decay_s: float = 0.45
+    idle_pulse_rate: float = 0.35  # spontaneous pulses per second keep the net alive
+    idle_pulse_energy: float = 0.55
+    explode_speed: float = 1.6
+    explode_radius: float = 0.7
+    # Look
+    node_radius: float = 0.04
+    node_intensity: float = 0.22
+    core_radius: float = 0.012
+    core_intensity: float = 0.6
+    active_intensity: float = 1.4
+    line_px: float = 1.3
+    line_intensity: float = 0.5
+    active_line_boost: float = 2.5
+    spark_radius: float = 0.03
+    spark_intensity: float = 1.3
+    finger_line_intensity: float = 0.55
+    fingertip_radius: float = 0.03
+    fingertip_intensity: float = 0.35
+    max_links: int = 3000
+
+
+@dataclass(frozen=True)
+class HoloGridConfig:
+    """Mode 3: a perspective wireframe surface where fingertips make real waves."""
+
+    cols: int = 128
+    rows: int = 96
+    trail_tau_s: float = 0.05  # almost no trail and no diffusion: the wireframe stays crisp
+    trail_diffusion_per_s: float = 0.0
+    half_width: float = 8.0  # the plane spans x = ±half_width
+    near: float = 1.0  # and z = -near … -far in front of the camera
+    far: float = 15.0
+    eye_height: float = 1.6
+    look_distance: float = 6.0
+    fov_y_deg: float = 55.0
+    # 2D wave equation on the grid
+    wave_speed: float = 2.4  # world units per second
+    damping: float = 0.5  # per second
+    edge_cells: int = 10  # sponge layer at the borders so waves leave instead of bouncing
+    edge_damping: float = 6.0
+    max_substep_s: float = 0.02  # keeps the explicit solver stable (CFL)
+    finger_force: float = 5.0  # downward push of each raised fingertip
+    finger_speed_gain: float = 5.0  # extra push per world unit / s of fingertip speed
+    finger_radius: float = 0.22
+    pinch_impulse: float = 3.0
+    pinch_radius: float = 0.35
+    explode_impulse: float = 7.0
+    explode_radius: float = 0.6
+    rain_rate: float = 1.2  # idle drops per second
+    rain_impulse: float = 0.9
+    rain_radius: float = 0.25
+    swell_amplitude: float = 0.05  # gentle ocean swell added on top of the simulation
+    swell_wavelength: float = 3.5
+    swell_speed: float = 0.8
+    # Look
+    height_scale: float = 1.0
+    line_px: float = 1.2
+    line_intensity: float = 0.22
+    crest_intensity: float = 0.9
+    fill_intensity: float = 0.03
+    fog_density: float = 0.12
+    edge_fade: float = 0.15  # fraction of the width over which the side edges fade out
+    contact_radius: float = 0.05
+    contact_intensity: float = 0.35
+    horizon_glow_intensity: float = 0.03
+    horizon_glow_radius: float = 0.4
+    horizon_glow_count: int = 17
 
 
 @dataclass(frozen=True)
@@ -317,15 +495,19 @@ class Config:
     tracker: TrackerConfig = field(default_factory=TrackerConfig)
     geometry: HandGeometryConfig = field(default_factory=HandGeometryConfig)
     hand_state: HandStateConfig = field(default_factory=HandStateConfig)
+    gestures: GestureConfig = field(default_factory=GestureConfig)
     mock: MockConfig = field(default_factory=MockConfig)
     background: BackgroundConfig = field(default_factory=BackgroundConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
     render: RenderConfig = field(default_factory=RenderConfig)
+    ui: UIConfig = field(default_factory=UIConfig)
     postfx: PostFXConfig = field(default_factory=PostFXConfig)
     palette: PaletteConfig = field(default_factory=PaletteConfig)
     modes: ModesConfig = field(default_factory=ModesConfig)
     flow: FlowFieldConfig = field(default_factory=FlowFieldConfig)
     data_tide: DataTideConfig = field(default_factory=DataTideConfig)
+    neural: NeuralNetConfig = field(default_factory=NeuralNetConfig)
+    holo: HoloGridConfig = field(default_factory=HoloGridConfig)
 
 
 CONFIG = Config()
