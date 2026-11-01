@@ -1,2 +1,4 @@
 -r requirements.txt
 pytest==9.2.0
+# GIFs for the README (tools/make_gif.py, tools/render_demos.py)
+pillow==13.0.0
