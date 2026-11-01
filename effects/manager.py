@@ -98,6 +98,12 @@ class ModeManager:
         diffusion = sum(w * d for w, (_, d) in weights) / total
         return tau, diffusion
 
+    def focus_scale(self) -> float:
+        """Spotlight size for this frame, blended by the opacity of the visible modes."""
+        weights = [(e.opacity, e.focus_scale()) for i, e in enumerate(self._effects) if self._visible(i, e)]
+        total = sum(w for w, _ in weights)
+        return sum(w * f for w, f in weights) / total if total > 1e-6 else 1.0
+
     def draw(self, frame_gain: float = 1.0) -> None:
         for i, effect in enumerate(self._effects):
             if self._visible(i, effect):

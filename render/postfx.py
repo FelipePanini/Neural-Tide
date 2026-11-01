@@ -17,7 +17,8 @@ import random
 import moderngl
 import numpy as np
 
-from config import RGB, PostFXConfig
+from config import RGB, FocusConfig, PostFXConfig
+from render.focus import Spot
 from render.shader_library import ShaderLibrary
 
 _FULLSCREEN_QUAD = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
@@ -47,9 +48,20 @@ class _Target:
 class PostFX:
     """Owns the trail ping-pong buffers and the bloom mip chain."""
 
-    def __init__(self, ctx: moderngl.Context, shaders: ShaderLibrary, size: tuple[int, int], cfg: PostFXConfig) -> None:
+    def __init__(
+        self,
+        ctx: moderngl.Context,
+        shaders: ShaderLibrary,
+        size: tuple[int, int],
+        cfg: PostFXConfig,
+        focus: FocusConfig,
+    ) -> None:
         self._ctx = ctx
         self._cfg = cfg
+        self._focus_cfg = focus
+        self._spots = np.zeros((focus.max_spots, 4), dtype=np.float32)
+        self._spot_count = 0
+        self._focus_amount = 0.0
         self._quad = ctx.buffer(_FULLSCREEN_QUAD.tobytes())
         self._programs = {
             name: shaders.program(name, vertex="fullscreen")
@@ -91,6 +103,19 @@ class PostFX:
         )
         self._ripple_color = color
         self._ripple_age = 0.0
+
+    def set_focus(self, spots: list[Spot], amount: float) -> None:
+        """Spotlights for this frame (world space) and how strongly they mask the layer."""
+        self._spots[:] = 0.0
+        for row, spot in zip(self._spots, spots, strict=False):
+            row[:] = (
+                float(spot.center[0]) / self._aspect * 0.5 + 0.5,
+                float(spot.center[1]) * 0.5 + 0.5,
+                spot.radius * 0.5,  # world units → screen heights
+                spot.weight,
+            )
+        self._spot_count = min(len(spots), len(self._spots))
+        self._focus_amount = amount
 
     def _ripple_uniforms(self) -> tuple[float, float, RGB]:
         """Current radius, displacement and rim colour (all zero when idle)."""
@@ -180,6 +205,11 @@ class PostFX:
         comp["u_ripple_width"].value = cfg.ripple_width
         comp["u_ripple_strength"].value = strength
         comp["u_ripple_color"].value = rim
+        comp["u_spots"].write(self._spots.tobytes())
+        comp["u_spot_count"].value = self._spot_count
+        comp["u_focus_amount"].value = self._focus_amount
+        comp["u_focus_ambient"].value = self._focus_cfg.ambient
+        comp["u_focus_falloff"].value = self._focus_cfg.falloff
         target.use()
         self.scene.use(0)
         self._bloom[0].texture.use(1)

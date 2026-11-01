@@ -42,7 +42,7 @@ class Renderer:
         self._background_vao = ctx.vertex_array(self._background_prog, [(self._quad, "2f", "in_pos")])
         self._camera_tex: moderngl.Texture | None = None
 
-        self.postfx = PostFX(ctx, self.shaders, size, cfg.postfx)
+        self.postfx = PostFX(ctx, self.shaders, size, cfg.postfx, cfg.focus)
         self.primitives = PrimitiveBatch(ctx, self.shaders, cfg.render)
         self.text = TextRenderer(ctx, self.shaders, cfg.debug)
 

@@ -21,6 +21,7 @@ from core.tracker import HandFilterBank  # noqa: E402
 from effects import EFFECTS, EffectEnv  # noqa: E402
 from effects.manager import ModeManager  # noqa: E402
 from render.overlay import DebugInfo, DebugOverlay  # noqa: E402
+from render.focus import FocusState  # noqa: E402
 from render.palette import PaletteState  # noqa: E402
 from render.renderer import Renderer  # noqa: E402
 
@@ -56,6 +57,7 @@ def render_frames(  # type: ignore[no-untyped-def]
     hand: bool = True,
     mode: int = 0,
     curls: tuple[float, ...] = FINGER_PRESETS[5],
+    focus: bool = False,
     capture_every: int = 0,
 ) -> list[np.ndarray]:
     """Simulate ``frames`` frames offscreen; returns the last frame (plus every ``capture_every``-th)."""
@@ -72,6 +74,7 @@ def render_frames(  # type: ignore[no-untyped-def]
     )
     bank = HandFilterBank(cfg.tracker, cfg.geometry)
     smoother = HandStateSmoother(cfg.hand_state)
+    spotlight = FocusState(replace(cfg.focus, start_enabled=focus))
     captured = []
     for i in range(frames):
         t = i / FPS
@@ -79,6 +82,7 @@ def render_frames(  # type: ignore[no-untyped-def]
         obs = [synthetic_hand(hand_path(t), curls, pinch=pinch, image_aspect=aspect)] if hand else []
         hands = smoother.update(TrackingFrame(i + 1, t, bank.update(obs, t)), renderer.viewport, 1.0 / FPS)
         modes.update(1.0 / FPS, hands)
+        renderer.postfx.set_focus(spotlight.update(hands, 1.0 / FPS, renderer.viewport.aspect, modes.focus_scale()), spotlight.amount)
         renderer.begin_frame()
         renderer.draw_background(camera_visibility)
         gain = renderer.begin_effects(1.0 / FPS, *modes.trail((cfg.postfx.trail_tau_s, cfg.postfx.trail_diffusion_per_s)))
@@ -118,3 +122,12 @@ def test_every_mode_lights_up_the_screen(ctx, mode: int) -> None:  # type: ignor
 def test_tide_keeps_moving_without_hands(ctx) -> None:  # type: ignore[no-untyped-def]
     first, *_, last = render_frames(ctx, frames=31, hand=False, camera_visibility=0.0, overlay_visible=False, capture_every=30)
     assert np.abs(first.astype(int) - last.astype(int)).mean() > 1.0
+
+
+def test_focus_keeps_the_effect_around_the_hand(ctx) -> None:  # type: ignore[no-untyped-def]
+    full, *_ = render_frames(ctx, camera_visibility=0.0, overlay_visible=False, focus=False)
+    focused, *_ = render_frames(ctx, camera_visibility=0.0, overlay_visible=False, focus=True)
+    hand = (slice(90, 200), slice(110, 230))  # around the circling hand (left half)
+    far = (slice(20, 120), slice(380, 470))  # top-right corner
+    assert focused[far].mean() < 0.25 * full[far].mean()
+    assert focused[hand].mean() > 0.5 * full[hand].mean()

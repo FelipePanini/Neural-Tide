@@ -284,6 +284,26 @@ class PostFXConfig:
 
 
 @dataclass(frozen=True)
+class FocusConfig:
+    """Effects show only around the hands: a soft spotlight per hand (M toggles)."""
+
+    start_enabled: bool = True
+    toggle_tau_s: float = 0.4
+    ambient: float = 0.01  # how much of the effect still shows far from any hand
+    hand_scale: float = 1.7  # spotlight radius / hand size (centroid to farthest landmark)
+    min_radius: float = 0.3  # world units (the screen is 2 units tall)
+    max_radius: float = 0.95
+    falloff: float = 2.3  # brightness at the radius = exp(-falloff) ≈ 10%
+    # Without hands a smaller, dimmer spotlight drifts around so the idle effect stays alive.
+    idle_radius: float = 0.5
+    idle_brightness: float = 0.55
+    idle_path: tuple[float, float] = (0.55, 0.4)  # Lissajous size (share of half width / height)
+    idle_period_s: float = 31.0
+    idle_fade_tau_s: float = 0.8
+    max_spots: int = 4  # must match the composite shader
+
+
+@dataclass(frozen=True)
 class Palette:
     name: str
     primary: RGB
@@ -342,6 +362,7 @@ class DataTideConfig:
 
     particle_count: int = 24000
     seed: int = 11
+    focus_scale: float = 1.0  # size of the hand spotlight for this mode
     # Particles relax towards the local flow with this time constant
     # (a damped spring on velocity), varied per particle for an organic feel.
     follow_tau_s: float = 0.35
@@ -393,6 +414,7 @@ class NeuralNetConfig:
 
     node_count: int = 170
     seed: int = 21
+    focus_scale: float = 1.1
     trail_tau_s: float = 0.1  # shorter trails than the tide: links are long-lived shapes
     trail_diffusion_per_s: float = 4.0
     drift_speed: float = 0.07  # nodes ride a slow curl-noise current
@@ -445,6 +467,7 @@ class HoloGridConfig:
 
     cols: int = 128
     rows: int = 96
+    focus_scale: float = 1.4  # the grid reads better through a wider window
     trail_tau_s: float = 0.05  # almost no trail and no diffusion: the wireframe stays crisp
     trail_diffusion_per_s: float = 0.0
     half_width: float = 8.0  # the plane spans x = ±half_width
@@ -502,6 +525,7 @@ class Config:
     render: RenderConfig = field(default_factory=RenderConfig)
     ui: UIConfig = field(default_factory=UIConfig)
     postfx: PostFXConfig = field(default_factory=PostFXConfig)
+    focus: FocusConfig = field(default_factory=FocusConfig)
     palette: PaletteConfig = field(default_factory=PaletteConfig)
     modes: ModesConfig = field(default_factory=ModesConfig)
     flow: FlowFieldConfig = field(default_factory=FlowFieldConfig)

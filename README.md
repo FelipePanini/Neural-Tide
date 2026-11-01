@@ -86,6 +86,7 @@ Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
 |---|---|
 | 1 a 8 | troca de modo, com transição suave (por enquanto existem os modos 1 a 3) |
 | P | próxima paleta de cores (neon, matrix, âmbar, gelo) |
+| M | foco nas mãos ↔ tela cheia |
 | F1 ou D | liga/desliga o overlay de debug (no Mac, F1 costuma exigir Fn) |
 | C | fundo: câmera escurecida ou preto |
 | ESC | sair |
@@ -218,6 +219,17 @@ as ondas que saem, em vez de deixá-las refletir.
   da grade, com `fwidth`. Assim elas têm espessura constante em pixels a qualquer
   distância e somem antes de virar moiré no horizonte.
 
+### Foco nas mãos
+
+Por padrão, os efeitos aparecem só em volta das mãos, para a tela não ficar
+poluída. Cada mão abre um "holofote" de borda suave, do tamanho da mão aberta
+na tela (`FocusConfig.hand_scale`), que segue a mão com a mesma suavidade do
+rastreio. Longe das mãos sobra só um resquício de luz (`ambient`). Cada modo
+ajusta o tamanho do holofote; a grade, por exemplo, usa uma janela mais larga.
+Sem mãos, um holofote menor e mais fraco passeia devagar, então o estado ocioso
+continua vivo. A simulação segue acontecendo na tela toda: a máscara só decide
+o que aparece. A tecla **M** alterna, com fade, entre o foco e a tela cheia.
+
 ### Transições
 
 - **Crossfade**: os modos continuam vivos e só a opacidade muda, com easing. O
@@ -273,6 +285,7 @@ render/
   renderer.py        ordem do frame, fundo da câmera
   postfx.py          rastros, bloom, tone mapping e ondulação de transição
   gesture_ui.py      anel de progresso, avisos e selos
+  focus.py           holofotes que limitam o efeito às mãos
   projection.py      perspectiva e raio da tela até o plano
   glow.py            manchas de luz aditivas
   palette.py         paleta de cores com easing

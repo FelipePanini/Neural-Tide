@@ -52,6 +52,10 @@ class Effect(ABC):
         """Brightness factor for drawing: cross-fade opacity × frame-rate compensation."""
         return self.opacity * self.frame_gain
 
+    def focus_scale(self) -> float:
+        """Size of the hand spotlight for this mode (1 = default)."""
+        return 1.0
+
     def trail(self) -> tuple[float, float]:
         """(trail time constant, diffusion per second) this mode wants for the effect layer."""
         cfg = self.env.config.postfx

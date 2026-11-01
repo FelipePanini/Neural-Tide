@@ -252,6 +252,9 @@ class NeuralNet(Effect):
     def trail(self) -> tuple[float, float]:
         return self._cfg.trail_tau_s, self._cfg.trail_diffusion_per_s
 
+    def focus_scale(self) -> float:
+        return self._cfg.focus_scale
+
     def debug_lines(self) -> list[str]:
         sim = self.sim
         pulses = int(np.isfinite(sim.arrival).sum())

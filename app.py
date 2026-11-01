@@ -17,13 +17,14 @@ from core.stats import RateMeter
 from core.tracker import HandTracker
 from effects import EFFECTS, EffectEnv
 from effects.manager import ModeManager
+from render.focus import FocusState
 from render.gesture_ui import GestureUI
 from render.overlay import DebugInfo, DebugOverlay
 from render.palette import PaletteState
 from render.renderer import Renderer
 from render.window import create_window
 
-KEY_HINTS = "[1-8] modo  [P] paleta  [F1 ou D] debug  [C] fundo  [ESC] sair"
+KEY_HINTS = "[1-8] modo  [P] paleta  [M] foco  [F1 ou D] debug  [C] fundo  [ESC] sair"
 MOCK_HINTS = (
     "mock: roda ou setas = dedos · clique = pinça",
     "      botão direito ou F = punho · G = chifrinho · H = 2ª mão",
@@ -48,6 +49,7 @@ class App:
         self._fps = RateMeter(cfg.debug.rate_window_s)
         self._palette = PaletteState(cfg.palette)
         self._gestures = GestureEngine(cfg.gestures)
+        self._focus = FocusState(cfg.focus)
         self._last_gestures: GestureFrame | None = None
         self._modes: ModeManager | None = None
         self._renderer: Renderer | None = None
@@ -101,6 +103,8 @@ class App:
                 )
                 self._palette.update(dt)
                 modes.update(dt, hands)
+                spots = self._focus.update(hands, dt, renderer.viewport.aspect, modes.focus_scale())
+                renderer.postfx.set_focus(spots, self._focus.amount)
 
                 renderer.begin_frame()
                 renderer.draw_background(self._camera_mix)
@@ -205,6 +209,10 @@ class App:
                 self._select_mode(MODE_KEYS[event.key], np.zeros(2))
             elif event.key == pygame.K_p:
                 self._cycle_palette()
+            elif event.key == pygame.K_m:
+                on = self._focus.toggle()
+                if self._ui is not None:
+                    self._ui.notify("foco nas mãos" if on else "tela cheia")
             elif self.mock is not None:
                 self._handle_mock_event(event, renderer)
         elif event.type == pygame.VIDEORESIZE:

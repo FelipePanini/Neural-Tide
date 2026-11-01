@@ -231,6 +231,9 @@ class DataTide(Effect):
             self._glows.add(center, cfg.flash_radius * (0.5 + t), highlight * energy)
         self._glows.flush(viewport)
 
+    def focus_scale(self) -> float:
+        return self._cfg.focus_scale
+
     def debug_lines(self) -> list[str]:
         return [f"partículas {self.sim.count}  simulação {self.sim.step_ms:4.1f} ms"]
 

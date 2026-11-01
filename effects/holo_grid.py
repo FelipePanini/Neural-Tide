@@ -196,6 +196,9 @@ class HoloGrid(Effect):
     def trail(self) -> tuple[float, float]:
         return self._cfg.trail_tau_s, self._cfg.trail_diffusion_per_s
 
+    def focus_scale(self) -> float:
+        return self._cfg.focus_scale
+
     def debug_lines(self) -> list[str]:
         h = self.waves.h
         return [f"grade {self._cols}x{self._rows}  onda máx {np.abs(h).max():.2f}"]

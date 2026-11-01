@@ -1,7 +1,10 @@
 #version 330
 // Effect layer + bloom, tone-mapped and added on top of the background.
-// A mode change sends a ripple through the layer: pixels near the expanding
-// ring are displaced radially and its leading edge glows a little.
+// Spotlights limit the layer to the area around the hands (soft gaussian
+// edges, a faint ambient elsewhere). A mode change sends a ripple through the
+// layer: pixels near the expanding ring are displaced radially and its
+// leading edge glows a little.
+#define MAX_SPOTS 4
 uniform sampler2D u_scene;
 uniform sampler2D u_bloom;
 uniform float u_bloom_intensity;
@@ -15,9 +18,26 @@ uniform float u_ripple_radius;   // screen heights
 uniform float u_ripple_width;
 uniform float u_ripple_strength;
 uniform vec3 u_ripple_color;     // rim colour, already scaled
+uniform vec4 u_spots[MAX_SPOTS]; // uv x, uv y, radius (screen heights), weight
+uniform int u_spot_count;
+uniform float u_focus_amount;    // 0 = full screen, 1 = only around the hands (eased)
+uniform float u_focus_ambient;
+uniform float u_focus_falloff;
 
 in vec2 v_uv;
 out vec4 f_color;
+
+float focus_mask(vec2 uv) {
+    float miss = 1.0;  // soft union of the spots: 1 - Π(1 - mᵢ)
+    for (int i = 0; i < MAX_SPOTS; ++i) {
+        if (i >= u_spot_count) break;
+        vec2 d = (uv - u_spots[i].xy) * vec2(u_aspect, 1.0);
+        float r = max(u_spots[i].z, 1e-4);
+        miss *= 1.0 - u_spots[i].w * exp(-u_focus_falloff * dot(d, d) / (r * r));
+    }
+    float mask = u_focus_ambient + (1.0 - u_focus_ambient) * (1.0 - miss);
+    return mix(1.0, mask, u_focus_amount);
+}
 
 void main() {
     vec2 d = (v_uv - u_ripple_center) * vec2(u_aspect, 1.0);
@@ -27,7 +47,8 @@ void main() {
     vec2 dir = dist > 1e-5 ? d / dist : vec2(0.0);
     vec2 uv = v_uv - dir * (wave * u_ripple_strength) / vec2(u_aspect, 1.0);
 
-    vec3 hdr = texture(u_scene, uv).rgb + texture(u_bloom, uv).rgb * u_bloom_intensity + u_ripple_color * wave;
+    vec3 layer = texture(u_scene, uv).rgb + texture(u_bloom, uv).rgb * u_bloom_intensity;
+    vec3 hdr = layer * focus_mask(v_uv) + u_ripple_color * wave;
     // Tone map the peak channel and keep the hue, so dense neon stays neon
     // instead of washing out; only the very brightest spots bleach a little.
     float peak = max(hdr.r, max(hdr.g, hdr.b));
