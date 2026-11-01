@@ -68,10 +68,14 @@ class PrimitiveBatch:
         data[:, :, 7] = self._cfg.line_feather_px / total_px
         self._lines.append(data.reshape(-1, _LINE_FLOATS))
 
-    def flush(self, viewport: Viewport) -> None:
-        """Draw everything collected since the last flush (lines below points)."""
+    def flush(self, viewport: Viewport, premultiplied: bool = False) -> None:
+        """Draw everything collected since the last flush (lines below points).
+
+        ``premultiplied`` outputs colour × alpha, for additive blending in the effect layer.
+        """
         for prog in (self._points_prog, self._lines_prog):
             prog["u_aspect"].value = viewport.aspect
+            prog["u_premultiply"].value = int(premultiplied)
         if self._lines:
             verts = np.concatenate(self._lines)[: self._cfg.max_line_segments * _VERTS_PER_SEGMENT]
             self._line_buf.write(verts.tobytes())
