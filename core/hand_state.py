@@ -10,11 +10,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import math
+
 import numpy as np
 
 from config import HandStateConfig
 from core.easing import damp
-from core.hand import FINGERTIPS, INDEX_TIP, PALM_POINTS, THUMB_TIP, TrackingFrame, palm_center
+from core.hand import FINGERTIPS, INDEX_TIP, MIDDLE_MCP, PALM_POINTS, THUMB_TIP, WRIST, TrackingFrame, palm_center
 from core.viewport import Viewport
 
 
@@ -49,6 +51,12 @@ class HandState:
     @property
     def tips(self) -> np.ndarray:
         return self.points[list(FINGERTIPS)]
+
+    @property
+    def roll(self) -> float:
+        """Wrist roll in radians: 0 with fingers up, positive when they lean right."""
+        v = self.points[MIDDLE_MCP] - self.points[WRIST]
+        return math.atan2(float(v[0]), float(v[1]))
 
     @property
     def pinch_point(self) -> np.ndarray:
