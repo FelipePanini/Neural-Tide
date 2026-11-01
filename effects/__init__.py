@@ -1,6 +1,7 @@
 """Effect registry: a new mode is one file in this package plus one entry here."""
 
 from effects.ai_core import AICore
+from effects.attention import Attention
 from effects.base import Effect, EffectEnv
 from effects.data_tide import DataTide
 from effects.holo_grid import HoloGrid
@@ -14,6 +15,7 @@ EFFECTS: list[type[Effect]] = [
     HoloGrid,
     AICore,
     LightRibbons,
+    Attention,
 ]
 
 __all__ = ["EFFECTS", "Effect", "EffectEnv"]
