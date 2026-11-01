@@ -3,6 +3,7 @@
 from effects.ai_core import AICore
 from effects.attention import Attention
 from effects.base import Effect, EffectEnv
+from effects.code_rain import CodeRain
 from effects.data_tide import DataTide
 from effects.holo_grid import HoloGrid
 from effects.light_ribbons import LightRibbons
@@ -18,6 +19,7 @@ EFFECTS: list[type[Effect]] = [
     LightRibbons,
     Attention,
     ParticleBody,
+    CodeRain,
 ]
 
 __all__ = ["EFFECTS", "Effect", "EffectEnv"]
