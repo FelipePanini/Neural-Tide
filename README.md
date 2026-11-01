@@ -13,18 +13,30 @@ como ondas do mar. A mão perturba e influencia, mas não controla diretamente.
 |---|---|---|
 | **Python** | **3.12** | versão oficial do projeto |
 | mediapipe | 1.2.0 | HandLandmarker (API Tasks, modo VIDEO) |
-| opencv-contrib-python | 4.14.0.94 | só captura da webcam |
-| numpy | 2.5.4 | simulação vetorizada |
+| opencv-contrib-python | 4.12.0.88 | só captura da webcam |
+| numpy | 2.2.6 | simulação vetorizada |
 | moderngl | 5.13.0 | renderização na GPU (OpenGL 3.3) |
 | pygame-ce | 2.5.8 | janela, teclado e mouse |
 
-Por que Python 3.12: o mediapipe 1.2.0 suporta de 3.9 a 3.14, mas o numpy 2.5
-exige 3.12 ou mais novo. A 3.12 tem wheels para Windows de todos os pacotes acima
-(a 3.13 também deve funcionar). O OpenCV vem como `opencv-contrib-python` porque é
-o pacote que o mediapipe já instala; adicionar `opencv-python` criaria dois `cv2`
-em conflito.
+As mesmas versões valem para Windows e macOS.
 
-## Instalação (Windows)
+- **Python 3.12**: o mediapipe 1.2.0 suporta de 3.9 a 3.14, e todos os pacotes
+  acima têm wheels para Windows e Mac na 3.12 (a 3.13 também deve funcionar).
+- **OpenCV 4.12**: a partir da 4.13, o wheel de macOS traz uma cópia própria do
+  SDL2 que conflita com a do pygame. O OpenCV vem como `opencv-contrib-python`
+  porque é o pacote que o mediapipe já instala; adicionar `opencv-python` criaria
+  dois `cv2` em conflito.
+- **numpy 2.2**: o OpenCV 4.12 exige numpy abaixo de 2.3.
+
+### Sistemas suportados
+
+- **Windows 10/11** (64 bits)
+- **macOS em Apple Silicon** (M1 ou mais novo). O mediapipe 1.x só publica wheels
+  de macOS para arm64, então Macs com Intel não são suportados.
+
+## Instalação
+
+### Windows
 
 ```bat
 git clone https://github.com/FelipePanini/Neural-Tide.git
@@ -34,6 +46,26 @@ py -3.12 -m venv .venv
 pip install -r requirements-dev.txt
 python tools/download_model.py
 ```
+
+### macOS
+
+Instale o Python 3.12 (pelo [python.org](https://www.python.org/downloads/),
+com `brew install python@3.12` ou com `uv python install 3.12`) e depois:
+
+```bash
+git clone https://github.com/FelipePanini/Neural-Tide.git
+cd Neural-Tide
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python tools/download_model.py
+```
+
+Na primeira vez que você rodar com a webcam, o macOS pede permissão de câmera
+para o app que abriu o Python (Terminal, iTerm, VS Code…). Se você negar, libere
+depois em **Ajustes do Sistema › Privacidade e Segurança › Câmera** e reabra o
+terminal. Se um iPhone por perto virar a câmera 0 (Câmera de Continuidade), use
+`--camera 1`.
 
 `tools/download_model.py` baixa o `hand_landmarker.task` para `models/`.
 Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
@@ -51,7 +83,7 @@ Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
 
 | Tecla | Ação |
 |---|---|
-| F1 | liga/desliga o overlay de debug |
+| F1 ou D | liga/desliga o overlay de debug (no Mac, F1 costuma exigir Fn) |
 | C | fundo: câmera escurecida ou preto |
 | ESC | sair |
 
@@ -60,9 +92,9 @@ Com `--all`, baixa também o segmentador de pessoa, usado no modo 7.
 | Entrada | Mão simulada |
 |---|---|
 | mover o mouse | move a mão (o ponteiro fica no centro da palma) |
-| roda do mouse | quantidade de dedos levantados (0 a 5) |
-| botão esquerdo | pinça |
-| botão direito (segurado) | punho fechado |
+| roda do mouse, rolagem do trackpad ou setas ↑/↓ | quantidade de dedos levantados (0 a 5) |
+| botão esquerdo / clique | pinça |
+| botão direito ou F (segurado) | punho fechado |
 | H | liga/desliga uma segunda mão espelhada |
 | tirar o mouse da janela | a mão sai do quadro |
 
@@ -75,6 +107,8 @@ Camera (thread) ──► HandTracker (thread) ──► latest() ──► loop
 ```
 
 - **Captura em thread**: o render sempre usa o frame mais novo, sem esperar a câmera.
+  No macOS, a primeira abertura acontece na thread principal, porque só assim o
+  sistema mostra o pedido de permissão; depois a captura segue na thread.
 - **Tracking em thread**: o MediaPipe roda fora do loop de render, então uma
   inferência lenta não derruba o FPS da animação.
 - **Filtro One Euro** em todos os landmarks (imagem e 3D). Ele suaviza bem a mão
