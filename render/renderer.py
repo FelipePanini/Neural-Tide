@@ -95,9 +95,10 @@ class Renderer:
         self._background_vao.render(moderngl.TRIANGLE_STRIP)
         self.ctx.enable(moderngl.BLEND)
 
-    def begin_effects(self, dt: float) -> None:
-        """Bind the HDR effect layer (last frame faded) with additive blending."""
-        self.postfx.begin(dt)
+    def begin_effects(self, dt: float, trail_tau_s: float, diffusion_per_s: float) -> float:
+        """Bind the HDR effect layer (last frame faded) with additive blending; returns the frame gain."""
+        self.postfx.begin(dt, trail_tau_s, diffusion_per_s)
+        return self.postfx.frame_gain
 
     def finish_effects(self) -> None:
         """Bloom, tone map and add the effect layer onto the target."""

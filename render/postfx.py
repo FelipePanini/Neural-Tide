@@ -5,6 +5,8 @@ Per frame::
     begin(dt)   last frame's light × decay → new trail buffer, bound for additive drawing
     (effects draw)
     finish()    bright-pass + dual-filter bloom, then tone map and add onto the target
+
+``ripple()`` starts a liquid shock wave through the layer (used on mode changes).
 """
 
 from __future__ import annotations
@@ -15,10 +17,11 @@ import random
 import moderngl
 import numpy as np
 
-from config import PostFXConfig
+from config import RGB, PostFXConfig
 from render.shader_library import ShaderLibrary
 
 _FULLSCREEN_QUAD = np.array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+_REFERENCE_DT = 1.0 / 60.0  # effects are tuned at 60 fps; frame_gain keeps that look at any rate
 
 
 class _Target:
@@ -58,6 +61,11 @@ class PostFX:
         self._trails: list[_Target] = []
         self._bloom: list[_Target] = []
         self._current = 0
+        self._aspect = size[0] / max(size[1], 1)
+        self.frame_gain = 1.0
+        self._ripple_age = math.inf
+        self._ripple_center = (0.5, 0.5)
+        self._ripple_color: RGB = (0.0, 0.0, 0.0)
         self._allocate(size)
 
     def _allocate(self, size: tuple[int, int]) -> None:
@@ -72,25 +80,56 @@ class PostFX:
     def resize(self, size: tuple[int, int]) -> None:
         for target in (*self._trails, *self._bloom):
             target.release()
+        self._aspect = size[0] / max(size[1], 1)
         self._allocate(size)
+
+    def ripple(self, center_world: np.ndarray, color: RGB) -> None:
+        """Start a ripple at a world-space point (e.g. the hand that changed mode)."""
+        self._ripple_center = (
+            float(center_world[0]) / self._aspect * 0.5 + 0.5,
+            float(center_world[1]) * 0.5 + 0.5,
+        )
+        self._ripple_color = color
+        self._ripple_age = 0.0
+
+    def _ripple_uniforms(self) -> tuple[float, float, RGB]:
+        """Current radius, displacement and rim colour (all zero when idle)."""
+        cfg = self._cfg
+        t = self._ripple_age / cfg.ripple_duration_s
+        if t >= 1.0:
+            return 0.0, 0.0, (0.0, 0.0, 0.0)
+        radius = (1.0 - (1.0 - t) ** 3) * cfg.ripple_max_radius  # ease-out cubic
+        fade = (1.0 - t) ** 2
+        rim = cfg.ripple_rim * fade
+        r, g, b = self._ripple_color
+        return radius, cfg.ripple_strength * fade, (r * rim, g * rim, b * rim)
 
     @property
     def scene(self) -> moderngl.Texture:
         """The effect layer of the current frame (HDR)."""
         return self._trails[self._current].texture
 
-    def begin(self, dt: float) -> None:
-        """Fade last frame into a fresh buffer and leave it bound with additive blending."""
+    def begin(self, dt: float, trail_tau_s: float, diffusion_per_s: float) -> None:
+        """Fade last frame into a fresh buffer and leave it bound with additive blending.
+
+        Light accumulates in the trail up to ``1 / (1 - decay)`` times, which
+        depends on the frame rate; ``frame_gain`` (for the effects to multiply
+        their brightness by) cancels that so the picture looks the same at 30
+        or 144 fps.
+        """
         cfg = self._cfg
+        self._ripple_age += dt
+        decay = math.exp(-dt / trail_tau_s)
+        self.frame_gain = (1.0 - decay) / (1.0 - math.exp(-_REFERENCE_DT / trail_tau_s))
         src = self._trails[self._current]
         self._current = 1 - self._current
         dst = self._trails[self._current]
 
         prog = self._programs["fade"]
         prog["u_texel"].value = src.texel
-        prog["u_decay"].value = math.exp(-dt / cfg.trail_tau_s)
+        prog["u_decay"].value = decay
         prog["u_floor"].value = cfg.trail_floor_per_s * dt
-        prog["u_diffusion"].value = min(cfg.trail_diffusion_per_s * dt, 1.0)
+        prog["u_diffusion"].value = min(diffusion_per_s * dt, 1.0)
         dst.fbo.use()
         src.texture.use(0)
         self._ctx.disable(moderngl.BLEND)
@@ -134,6 +173,13 @@ class PostFX:
         comp["u_whiteout"].value = cfg.whiteout
         comp["u_dither"].value = cfg.dither
         comp["u_seed"].value = random.random() * 1000.0
+        radius, strength, rim = self._ripple_uniforms()
+        comp["u_aspect"].value = self._aspect
+        comp["u_ripple_center"].value = self._ripple_center
+        comp["u_ripple_radius"].value = radius
+        comp["u_ripple_width"].value = cfg.ripple_width
+        comp["u_ripple_strength"].value = strength
+        comp["u_ripple_color"].value = rim
         target.use()
         self.scene.use(0)
         self._bloom[0].texture.use(1)

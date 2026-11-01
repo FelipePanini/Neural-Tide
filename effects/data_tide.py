@@ -19,6 +19,7 @@ import numpy as np
 
 from config import DataTideConfig, FlowFieldConfig
 from core.easing import damp
+from core.gestures import GestureEvent, GestureKind
 from core.hand import RIGHT
 from core.hand_state import HandState
 from effects.base import Effect, EffectEnv
@@ -94,8 +95,22 @@ class TideSimulation:
         strength = cfg.idle_circulation / cfg.vortex_circulation
         return Stirrer(center=center, velocity=velocity, weight=self._idle_weight * strength, spin=1.0)
 
-    def step(self, dt: float, stirrers: Sequence[Stirrer], half_width: float, half_height: float = 1.0) -> None:
-        """Advance every particle by ``dt`` seconds."""
+    def explode(self, center: np.ndarray, speed: float, radius: float) -> None:
+        """Kick particles outwards from ``center``: a velocity impulse, positions stay continuous."""
+        rel = self.pos - center
+        r2 = np.einsum("ij,ij->i", rel, rel)
+        push = speed * gaussian(r2, radius) / (np.sqrt(r2) + 1e-6)
+        self.vel += rel * push[:, None]
+
+    def step(
+        self,
+        dt: float,
+        stirrers: Sequence[Stirrer],
+        half_width: float,
+        half_height: float = 1.0,
+        intensity: float = 1.0,
+    ) -> None:
+        """Advance every particle by ``dt`` seconds; ``intensity`` scales how hard hands stir."""
         started = time.perf_counter()
         cfg = self._cfg
         self.field.update(dt, half_width, half_height)
@@ -110,9 +125,10 @@ class TideSimulation:
             rel = self.pos - s.center
             r2 = np.einsum("ij,ij->i", rel, rel)
             core = cfg.vortex_core * (1.0 - (1.0 - cfg.pinch_core_scale) * s.pinch)
-            circulation = cfg.vortex_circulation * s.spin * s.weight * (1.0 + cfg.pinch_spin_boost * s.pinch)
+            strength = s.weight * intensity
+            circulation = cfg.vortex_circulation * s.spin * strength * (1.0 + cfg.pinch_spin_boost * s.pinch)
             target += vortex(rel, r2, circulation, core, cfg.vortex_reach)
-            target += np.outer(gaussian(r2, cfg.current_reach), s.velocity * (cfg.current_gain * s.weight))
+            target += np.outer(gaussian(r2, cfg.current_reach), s.velocity * (cfg.current_gain * strength))
             if s.pinch > 1e-3:
                 pull = cfg.pinch_suction * s.pinch * s.weight
                 target += suction(rel, r2, pull, core, cfg.vortex_reach)
@@ -167,10 +183,17 @@ class DataTide(Effect):
         self._packed = np.empty((self.sim.count, _INSTANCE_FLOATS), dtype=np.float32)
         self._glows = GlowBatch(ctx, env.shaders, env.config.render.max_glows)
         self._hands: Sequence[HandState] = ()
+        self._flashes: list[tuple[np.ndarray, float]] = []  # (centre, age)
 
     def update(self, dt: float, hands: Sequence[HandState]) -> None:
         self._hands = hands
-        self.sim.step(dt, stirrers_from_hands(hands, self._cfg), self.env.viewport.aspect)
+        self.sim.step(dt, stirrers_from_hands(hands, self._cfg), self.env.viewport.aspect, intensity=self.intensity)
+        self._flashes = [(c, age + dt) for c, age in self._flashes if age + dt < self._cfg.flash_duration_s]
+
+    def on_gesture(self, event: GestureEvent) -> None:
+        if event.kind is GestureKind.EXPLODE:
+            self.sim.explode(event.position, self._cfg.explode_speed, self._cfg.explode_radius)
+            self._flashes.append((event.position, 0.0))
 
     def draw(self) -> None:
         cfg = self._cfg
@@ -190,7 +213,7 @@ class DataTide(Effect):
         prog["u_streak_s"].value = cfg.streak_s
         prog["u_max_streak_px"].value = cfg.max_streak_px
         prog["u_fast_speed"].value = cfg.fast_speed
-        prog["u_intensity"].value = cfg.intensity * self.opacity
+        prog["u_intensity"].value = cfg.intensity * self.visibility * (0.6 + 0.4 * self.intensity)
         prog["u_primary"].value = palette.primary
         prog["u_secondary"].value = palette.secondary
         prog["u_highlight"].value = palette.highlight
@@ -199,8 +222,13 @@ class DataTide(Effect):
 
         glow = np.asarray(palette.glow, dtype=np.float32)
         for hand in self._hands:
-            energy = cfg.glow_intensity * hand.presence * self.opacity * (1.0 + cfg.glow_pinch_boost * hand.pinch)
+            energy = cfg.glow_intensity * hand.presence * self.visibility * (1.0 + cfg.glow_pinch_boost * hand.pinch)
             self._glows.add(hand.palm, cfg.glow_radius, glow * energy)
+        highlight = np.asarray(palette.highlight, dtype=np.float32)
+        for center, age in self._flashes:
+            t = age / cfg.flash_duration_s
+            energy = cfg.flash_intensity * (1.0 - t) ** 2 * self.visibility
+            self._glows.add(center, cfg.flash_radius * (0.5 + t), highlight * energy)
         self._glows.flush(viewport)
 
     def debug_lines(self) -> list[str]:

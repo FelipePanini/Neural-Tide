@@ -142,8 +142,8 @@ class MockHandSource:
     """Turns the mouse into a hand so everything can be tested without a webcam.
 
     Mouse wheel / trackpad scroll or arrow keys: raised fingers (0–5) · left
-    button: pinch · right button or F: fist · H: mirrored second hand · moving
-    the pointer out of the window: hand leaves.
+    button: pinch · right button or F: fist · G: horns · H: mirrored second
+    hand · moving the pointer out of the window: hand leaves.
     """
 
     def __init__(self, cfg: Config) -> None:
@@ -155,6 +155,7 @@ class MockHandSource:
         self._pinch_target = 0.0
         self._pinch = 0.0
         self._fist = False
+        self._horns = False
         self._finger_count = cfg.mock.default_fingers
         self._curls = np.array(FINGER_PRESETS[self._finger_count])
         self._second_hand = False
@@ -194,6 +195,9 @@ class MockHandSource:
     def set_fist(self, active: bool) -> None:
         self._fist = active
 
+    def set_horns(self, active: bool) -> None:
+        self._horns = active
+
     def change_fingers(self, delta: int) -> None:
         self._finger_count = min(max(self._finger_count + delta, 0), 5)
 
@@ -213,7 +217,12 @@ class MockHandSource:
     def update(self, now: float, dt: float, image_aspect: float) -> None:
         """Advance the mock by ``dt`` and publish a new frame stamped ``now``."""
         cfg = self._cfg
-        target = np.array(FINGER_PRESETS[0 if self._fist else self._finger_count])
+        if self._fist:
+            target = np.array(FINGER_PRESETS[0])
+        elif self._horns:
+            target = np.array(HORNS_PRESET)
+        else:
+            target = np.array(FINGER_PRESETS[self._finger_count])
         self._curls = damp(self._curls, target, cfg.curl_tau_s, dt)
         self._pinch = damp(self._pinch, self._pinch_target, cfg.pinch_tau_s, dt)
 

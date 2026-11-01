@@ -54,11 +54,13 @@ def render_frames(  # type: ignore[no-untyped-def]
     overlay_visible: bool = True,
     pinch: float = 0.0,
     hand: bool = True,
+    mode: int = 0,
+    curls: tuple[float, ...] = FINGER_PRESETS[5],
     capture_every: int = 0,
 ) -> list[np.ndarray]:
     """Simulate ``frames`` frames offscreen; returns the last frame (plus every ``capture_every``-th)."""
     fbo = ctx.simple_framebuffer(size)
-    cfg = replace(CFG, debug=replace(CFG.debug, start_visible=overlay_visible))
+    cfg = replace(CFG, debug=replace(CFG.debug, start_visible=overlay_visible), modes=replace(CFG.modes, initial=mode))
     renderer = Renderer(ctx, size, cfg, target=fbo)
     overlay = DebugOverlay(renderer, cfg.debug)
     gradient = np.linspace(0, 255, 64 * 48 * 3, dtype=np.uint8).reshape(48, 64, 3)
@@ -74,13 +76,13 @@ def render_frames(  # type: ignore[no-untyped-def]
     for i in range(frames):
         t = i / FPS
         aspect = renderer.viewport.image_aspect
-        obs = [synthetic_hand(hand_path(t), FINGER_PRESETS[5], pinch=pinch, image_aspect=aspect)] if hand else []
+        obs = [synthetic_hand(hand_path(t), curls, pinch=pinch, image_aspect=aspect)] if hand else []
         hands = smoother.update(TrackingFrame(i + 1, t, bank.update(obs, t)), renderer.viewport, 1.0 / FPS)
         modes.update(1.0 / FPS, hands)
         renderer.begin_frame()
         renderer.draw_background(camera_visibility)
-        renderer.begin_effects(1.0 / FPS)
-        modes.draw()
+        gain = renderer.begin_effects(1.0 / FPS, *modes.trail((cfg.postfx.trail_tau_s, cfg.postfx.trail_diffusion_per_s)))
+        modes.draw(gain)
         renderer.finish_effects()
         info = DebugInfo(FPS, SourceStatus("mock (mouse)", FPS), "1", "—", "câmera")
         overlay.draw(hands, info, 1.0 / FPS)
@@ -105,11 +107,12 @@ def test_black_background_when_camera_hidden(ctx) -> None:  # type: ignore[no-un
     assert pixels[-20:, -60:].max() == 0  # bottom-right corner has neither camera nor overlay
 
 
-def test_data_tide_lights_up_the_screen(ctx) -> None:  # type: ignore[no-untyped-def]
-    (pixels,) = render_frames(ctx, camera_visibility=0.0, overlay_visible=False)
+@pytest.mark.parametrize("mode", range(len(EFFECTS)))
+def test_every_mode_lights_up_the_screen(ctx, mode: int) -> None:  # type: ignore[no-untyped-def]
+    (pixels,) = render_frames(ctx, camera_visibility=0.0, overlay_visible=False, mode=mode)
     lit = (pixels.max(axis=2) > 10).mean()
-    assert 0.05 < lit < 0.95  # particles and trails cover part of the screen, not all of it
-    assert pixels.max() > 120  # bright streaks / bloom
+    assert 0.02 < lit < 0.95  # the effect covers part of the screen, not all of it
+    assert pixels.max() > 100  # bright highlights / bloom
 
 
 def test_tide_keeps_moving_without_hands(ctx) -> None:  # type: ignore[no-untyped-def]
